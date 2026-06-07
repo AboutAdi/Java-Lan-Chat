@@ -1,0 +1,17 @@
+.chat-bubble-sent {
+    -fx-background-color: #1E88E5;
+    -fx-text-fill: white;
+    -fx-padding: 10px 15px;
+    -fx-background-radius: 15px 15px 0px 15px;
+}
+
+.chat-bubble-received {
+    -fx-background-color: #2C2C2C;
+    -fx-text-fill: white;
+    -fx-padding: 10px 15px;
+    -fx-background-radius: 15px 15px 15px 0px;
+}
+
+.peer-cell-online {
+    -fx-text-fill: #4CAF50;
+}
