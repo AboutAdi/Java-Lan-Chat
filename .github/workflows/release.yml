@@ -40,7 +40,7 @@ jobs:
       - name: Generate Icon
         run: |
           mkdir -p desktop/src/main/resources/icons
-          convert -background none lan-chat-full-optimized.svg desktop/src/main/resources/icons/icon.png
+          convert -background none -resize 512x512 lan-chat-full-optimized.svg desktop/src/main/resources/icons/icon.png
       - name: Build DEB
         run: ./gradlew :desktop:jpackage
       - name: Upload DEB
@@ -61,7 +61,7 @@ jobs:
       - name: Generate Icon
         run: |
           mkdir desktop\src\main\resources\icons
-          magick convert -background none lan-chat-full-optimized.svg desktop\src\main\resources\icons\icon.ico
+          magick -background none -resize 256x256 lan-chat-full-optimized.svg desktop\src\main\resources\icons\icon.ico
       - name: Build EXE/MSI
         run: ./gradlew :desktop:jpackage
       - name: Upload Windows Installer
@@ -82,7 +82,7 @@ jobs:
       - name: Generate Icon
         run: |
           mkdir -p desktop/src/main/resources/icons
-          magick convert -background none lan-chat-full-optimized.svg desktop/src/main/resources/icons/icon.icns || true
+          magick -background none -resize 512x512 lan-chat-full-optimized.svg desktop/src/main/resources/icons/icon.icns || true
           # Fallback if magick fails
           if [ ! -f desktop/src/main/resources/icons/icon.icns ]; then
             touch desktop/src/main/resources/icons/icon.icns
