@@ -1,17 +1,181 @@
+.root {
+    -fx-font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+/* Sidebar / Peer List */
+.sidebar {
+    -fx-background-color: #f0f2f5;
+    -fx-border-color: transparent #dadce0 transparent transparent;
+}
+
+.sidebar-header {
+    -fx-background-color: #f0f2f5;
+    -fx-padding: 10px;
+    -fx-border-color: transparent transparent #dadce0 transparent;
+}
+
+.list-view {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+}
+
+.list-cell {
+    -fx-background-color: transparent;
+    -fx-padding: 10px;
+    -fx-border-color: transparent transparent #f0f2f5 transparent;
+    -fx-text-fill: #111b21;
+}
+
+.list-cell:filled:hover {
+    -fx-background-color: #f5f6f6;
+    -fx-cursor: hand;
+}
+
+.list-cell:filled:selected {
+    -fx-background-color: #ebebeb;
+}
+
+/* Chat Area */
+.chat-pane {
+    -fx-background-color: #efeae2;
+    /* optional: a subtle background pattern could be added here */
+}
+
+.chat-header {
+    -fx-background-color: #f0f2f5;
+    -fx-padding: 10px 20px;
+    -fx-border-color: transparent transparent #dadce0 transparent;
+}
+
+.chat-header-name {
+    -fx-font-size: 16px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #111b21;
+}
+
+.chat-header-status {
+    -fx-font-size: 13px;
+    -fx-text-fill: #333333;
+}
+
+.chat-scroll-pane {
+    -fx-background-color: transparent;
+    -fx-background: transparent;
+}
+
+.chat-scroll-pane .viewport {
+    -fx-background-color: transparent;
+}
+
+/* Chat Bubbles */
+.chat-bubble-container {
+    -fx-padding: 2px 10px;
+}
+
 .chat-bubble-sent {
-    -fx-background-color: #1E88E5;
-    -fx-text-fill: white;
-    -fx-padding: 10px 15px;
-    -fx-background-radius: 15px 15px 0px 15px;
+    -fx-background-color: #dcf8c6;
+    -fx-padding: 8px 12px;
+    -fx-background-radius: 8px 0px 8px 8px;
+    -fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.1), 3, 0, 0, 1);
 }
 
 .chat-bubble-received {
-    -fx-background-color: #2C2C2C;
-    -fx-text-fill: white;
-    -fx-padding: 10px 15px;
-    -fx-background-radius: 15px 15px 15px 0px;
+    -fx-background-color: #ffffff;
+    -fx-padding: 8px 12px;
+    -fx-background-radius: 0px 8px 8px 8px;
+    -fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.1), 3, 0, 0, 1);
 }
 
-.peer-cell-online {
-    -fx-text-fill: #4CAF50;
+.chat-text {
+    -fx-font-size: 14px;
+    -fx-text-fill: #111b21;
+}
+
+.chat-meta {
+    -fx-font-size: 11px;
+    -fx-text-fill: #333333;
+    -fx-padding: 5px 0 0 0;
+}
+
+/* Input Area */
+.input-area {
+    -fx-background-color: #f0f2f5;
+    -fx-padding: 10px 20px;
+}
+
+.input-field {
+    -fx-background-color: #ffffff;
+    -fx-background-radius: 20px;
+    -fx-padding: 10px 15px;
+    -fx-font-size: 14px;
+    -fx-border-color: transparent;
+    -fx-text-fill: #111b21;
+    -fx-prompt-text-fill: #555555;
+}
+
+.send-button {
+    -fx-background-color: #00a884;
+    -fx-text-fill: white;
+    -fx-background-radius: 50%;
+    -fx-padding: 10px 15px;
+    -fx-cursor: hand;
+}
+
+.send-button:hover {
+    -fx-background-color: #008f6f;
+}
+
+/* Login Screen */
+.login-root {
+    -fx-background-color: #f0f2f5;
+}
+
+.login-card {
+    -fx-background-color: #ffffff;
+    -fx-background-radius: 8px;
+    -fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.1), 10, 0, 0, 2);
+}
+
+.login-title {
+    -fx-font-size: 24px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #111b21;
+}
+
+.login-subtitle {
+    -fx-font-size: 14px;
+    -fx-text-fill: #333333;
+}
+
+.login-label {
+    -fx-font-size: 13px;
+    -fx-text-fill: #333333;
+}
+
+.login-input {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent transparent #00a884 transparent;
+    -fx-border-width: 0 0 2px 0;
+    -fx-font-size: 16px;
+    -fx-padding: 5px 0px;
+    -fx-text-fill: #111b21;
+    -fx-prompt-text-fill: #555555;
+}
+
+.login-input:focused {
+    -fx-border-color: transparent transparent #008f6f transparent;
+}
+
+.login-button {
+    -fx-background-color: #00a884;
+    -fx-text-fill: white;
+    -fx-font-size: 15px;
+    -fx-font-weight: bold;
+    -fx-padding: 12px;
+    -fx-background-radius: 24px;
+    -fx-cursor: hand;
+}
+
+.login-button:hover {
+    -fx-background-color: #008f6f;
 }

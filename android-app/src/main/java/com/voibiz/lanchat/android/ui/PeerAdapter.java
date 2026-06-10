@@ -17,6 +17,21 @@ import java.util.List;
 public class PeerAdapter extends RecyclerView.Adapter<PeerAdapter.PeerViewHolder> {
 
     private List<Peer> peers = new ArrayList<>();
+    private String selectedPeerId = null;
+    private OnPeerClickListener listener;
+
+    public interface OnPeerClickListener {
+        void onPeerClick(Peer peer);
+    }
+
+    public void setOnPeerClickListener(OnPeerClickListener listener) {
+        this.listener = listener;
+    }
+
+    public void setSelectedPeerId(String selectedPeerId) {
+        this.selectedPeerId = selectedPeerId;
+        notifyDataSetChanged();
+    }
 
     public void setPeers(List<Peer> peers) {
         this.peers = peers;
@@ -35,8 +50,21 @@ public class PeerAdapter extends RecyclerView.Adapter<PeerAdapter.PeerViewHolder
         Peer peer = peers.get(position);
         
         if (holder.textDisplayName != null) {
-            String statusText = peer.getStatus() != null ? peer.getStatus().name() : "UNKNOWN";
-            holder.textDisplayName.setText(peer.getDisplayName() + " [" + statusText + "]");
+            holder.textDisplayName.setText(peer.getDisplayName());
+            if (holder.textStatus != null) {
+                holder.textStatus.setText(peer.getStatus() != null ? peer.getStatus().name() : "UNKNOWN");
+                if (peer.getStatus() == com.voibiz.lanchat.core.model.Peer.PeerStatus.ONLINE) {
+                    holder.textStatus.setTextColor(0xFF4CAF50); // Green
+                } else {
+                    holder.textStatus.setTextColor(0xFF757575); // Gray
+                }
+            }
+
+            holder.itemView.setOnClickListener(v -> {
+                if (listener != null) {
+                    listener.onPeerClick(peer);
+                }
+            });
         }
     }
 
@@ -47,10 +75,12 @@ public class PeerAdapter extends RecyclerView.Adapter<PeerAdapter.PeerViewHolder
 
     public static class PeerViewHolder extends RecyclerView.ViewHolder {
         TextView textDisplayName;
+        TextView textStatus;
 
         public PeerViewHolder(@NonNull View itemView) {
             super(itemView);
             textDisplayName = itemView.findViewById(R.id.peerName);
+            textStatus = itemView.findViewById(R.id.peerStatus);
         }
     }
 }

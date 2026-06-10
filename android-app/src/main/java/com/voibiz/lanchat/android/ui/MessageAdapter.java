@@ -56,8 +56,48 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         if (messageViewHolder.textMessage != null) {
             messageViewHolder.textMessage.setText(message.getText());
         }
-        if (messageViewHolder.textSender != null) {
-            messageViewHolder.textSender.setText(message.getSenderName());
+        
+        if (messageViewHolder.timeText != null) {
+            String timeStr = new java.text.SimpleDateFormat("HH:mm").format(new java.util.Date(message.getTimestamp()));
+            messageViewHolder.timeText.setText(timeStr);
+        }
+        
+        // Handle Layout Params for bubble direction
+        if (messageViewHolder.bubbleLayout != null) {
+            android.widget.LinearLayout.LayoutParams params = (android.widget.LinearLayout.LayoutParams) messageViewHolder.bubbleLayout.getLayoutParams();
+            if (message.getSenderId() != null && message.getSenderId().equals(localUserId)) {
+                params.gravity = android.view.Gravity.END;
+                messageViewHolder.bubbleLayout.setBackgroundResource(R.drawable.bg_bubble_sent);
+            } else {
+                params.gravity = android.view.Gravity.START;
+                messageViewHolder.bubbleLayout.setBackgroundResource(R.drawable.bg_bubble_received);
+            }
+            messageViewHolder.bubbleLayout.setLayoutParams(params);
+        }
+        
+        if (messageViewHolder.statusText != null) {
+            if (message.getSenderId() != null && message.getSenderId().equals(localUserId)) {
+                messageViewHolder.statusText.setVisibility(View.VISIBLE);
+                switch (message.getStatus()) {
+                    case SENDING: 
+                        messageViewHolder.statusText.setText("");
+                        break;
+                    case SENT: 
+                        messageViewHolder.statusText.setText("✓");
+                        messageViewHolder.statusText.setTextColor(android.graphics.Color.parseColor("#888888"));
+                        break;
+                    case DELIVERED: 
+                        messageViewHolder.statusText.setText("✓✓");
+                        messageViewHolder.statusText.setTextColor(android.graphics.Color.parseColor("#888888"));
+                        break;
+                    case READ: 
+                        messageViewHolder.statusText.setText("✓✓");
+                        messageViewHolder.statusText.setTextColor(android.graphics.Color.parseColor("#34B7F1"));
+                        break;
+                }
+            } else {
+                messageViewHolder.statusText.setVisibility(View.GONE);
+            }
         }
     }
 
@@ -68,12 +108,16 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 
     public static class MessageViewHolder extends RecyclerView.ViewHolder {
         TextView textMessage;
-        TextView textSender;
+        TextView timeText;
+        TextView statusText;
+        android.widget.LinearLayout bubbleLayout;
 
         public MessageViewHolder(@NonNull View itemView) {
             super(itemView);
             textMessage = itemView.findViewById(R.id.messageText);
-            textSender = itemView.findViewById(R.id.senderName);
+            timeText = itemView.findViewById(R.id.timeText);
+            statusText = itemView.findViewById(R.id.statusText);
+            bubbleLayout = itemView.findViewById(R.id.bubbleLayout);
         }
     }
 }

@@ -74,6 +74,9 @@ public class PeerRegistry {
         } else {
             existing.updateLastSeen();
             existing.setStatus(peer.getStatus());
+            if (peer.getDisplayName() != null) {
+                existing.setDisplayName(peer.getDisplayName());
+            }
             DiscoveryListener currentListener = listener;
             if (currentListener != null) {
                 currentListener.onPeerUpdated(existing);

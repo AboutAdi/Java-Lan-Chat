@@ -1,5 +1,58 @@
 # Java LAN Chat — Cross-Platform Desktop & Android Application
 
+# Testing Sandbox Implementation Plan
+
+This plan outlines the creation of a **Programmatic Sandbox** (Integration Testing Suite) across all three modules to rigorously test network concurrency, UI interactions, and Android specific flows without needing manual GUI interaction.
+
+## Proposed Changes
+
+### 1. Core Module (Integration Test Sandbox)
+We will create a multi-node simulation within a single JVM test process.
+#### [MODIFY] `core/build.gradle.kts`
+- Add `junit-jupiter` and `mockito-core` dependencies.
+- Enable JUnit platform for tests.
+
+#### [NEW] `core/src/test/java/com/voibiz/lanchat/core/network/NetworkSimulationSandboxTest.java`
+- **Objective:** Simulate 3+ peers on `localhost` using different ports.
+- **Scenarios:**
+  - Concurrent peer discovery (simulated using a mock `PeerRegistry` and direct TCP connections since multicast might be flaky in CI/tests).
+  - Messaging under load (e.g., 100 messages sent concurrently).
+  - Simulating abrupt socket closures and verifying `TCPConnectionManager` handles it gracefully.
+
+### 2. Desktop Module (TestFX Sandbox)
+#### [MODIFY] `desktop/build.gradle.kts`
+- Add `TestFX` (`org.testfx:testfx-junit5`) and `Monocle` (for headless UI testing).
+
+#### [NEW] `desktop/src/test/java/com/voibiz/lanchat/desktop/DesktopSandboxTest.java`
+- **Objective:** Programmatically click through the JavaFX UI.
+- **Scenarios:**
+  - Launch the app headless.
+  - Type username in `LoginController` and click "Join".
+  - Verify that the `MainController` loads and the `HistoryService` initializes properly.
+
+### 3. Android Module (Robolectric Sandbox)
+#### [MODIFY] `android-app/build.gradle.kts`
+- Add `org.robolectric:robolectric` and `androidx.test.espresso:espresso-intents`.
+
+#### [NEW] `android-app/src/test/java/com/voibiz/lanchat/android/AndroidSandboxTest.java`
+- **Objective:** Run Android UI logic on the JVM without an emulator.
+- **Scenarios:**
+  - Launch `LoginActivity`, input username, click Join.
+  - Verify `MainActivity` starts.
+  - Verify the Room Database (`AppDatabase`) can write and read messages correctly.
+
+## Verification Plan
+### Automated Tests
+- Run `./gradlew :core:test` to verify core network multi-node simulation.
+- Run `./gradlew :desktop:test` to verify TestFX headless UI interactions.
+- Run `./gradlew :android-app:testDebugUnitTest` to verify Robolectric Android UI simulations.
+
+## User Review Required
+> [!IMPORTANT]
+> - Do you want the **TestFX (Desktop)** tests to run completely headless, or would you prefer them to pop up an actual window on your screen during testing so you can briefly watch the bot click through the UI?
+> - For the **Core Network Sandbox**, we will bind to random available local ports (`0`) to avoid port conflicts during tests. Does this align with your expectations?
+
+---
 > **M.Sc. IT Final Year Project**
 > A beautiful, cross-platform LAN chat application built with Java, targeting both Desktop (JavaFX) and Android.
 

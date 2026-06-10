@@ -29,6 +29,10 @@ public class User {
     /** Port number the user is listening on for incoming connections. */
     private int port;
 
+    /** Default constructor required for Gson deserialization. */
+    public User() {
+    }
+
     /**
      * Constructs a new {@code User} with all fields specified.
      *

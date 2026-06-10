@@ -27,6 +27,7 @@ public class HistoryService {
                 "id TEXT PRIMARY KEY, " +
                 "sender_id TEXT, " +
                 "sender_name TEXT, " +
+                "recipient_id TEXT, " +
                 "room_id TEXT, " +
                 "text TEXT, " +
                 "timestamp INTEGER, " +
@@ -35,6 +36,13 @@ public class HistoryService {
         try (Connection conn = DriverManager.getConnection(DB_URL);
              Statement stmt = conn.createStatement()) {
             stmt.execute(createTableSql);
+            
+            // Add column to existing database if it doesn't exist (for backward compatibility during dev)
+            try {
+                stmt.execute("ALTER TABLE messages ADD COLUMN recipient_id TEXT");
+            } catch (SQLException ignore) {
+                // Column likely already exists
+            }
         } catch (SQLException e) {
             System.err.println("Failed to initialize database: " + e.getMessage());
         }
@@ -46,43 +54,43 @@ public class HistoryService {
      * @param msg the chat message to save
      */
     public void saveMessage(ChatMessage msg) {
-        String insertSql = "INSERT OR REPLACE INTO messages (id, sender_id, sender_name, room_id, text, timestamp, status) VALUES (?, ?, ?, ?, ?, ?, ?)";
+        String insertSql = "INSERT OR REPLACE INTO messages (id, sender_id, sender_name, recipient_id, room_id, text, timestamp, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
 
         try (Connection conn = DriverManager.getConnection(DB_URL);
              PreparedStatement pstmt = conn.prepareStatement(insertSql)) {
             pstmt.setString(1, msg.getMessageId());
             pstmt.setString(2, msg.getSenderId());
             pstmt.setString(3, msg.getSenderName());
-            pstmt.setString(4, msg.getRoomId());
-            pstmt.setString(5, msg.getText());
-            pstmt.setLong(6, msg.getTimestamp());
-            pstmt.setString(7, msg.getStatus() != null ? msg.getStatus().name() : null);
+            pstmt.setString(4, msg.getRecipientId());
+            pstmt.setString(5, msg.getRoomId());
+            pstmt.setString(6, msg.getText());
+            pstmt.setLong(7, msg.getTimestamp());
+            pstmt.setString(8, msg.getStatus() != null ? msg.getStatus().name() : null);
             pstmt.executeUpdate();
         } catch (SQLException e) {
             System.err.println("Failed to save message: " + e.getMessage());
         }
     }
 
-    /**
-     * Retrieves messages for a specific room, ordered by timestamp ascending.
-     *
-     * @param roomId the room ID
-     * @return a list of chat messages
-     */
-    public List<ChatMessage> getMessages(String roomId) {
+    public List<ChatMessage> getMessages(String peerOrRoomId) {
         List<ChatMessage> messages = new ArrayList<>();
-        String selectSql = "SELECT id, sender_id, sender_name, room_id, text, timestamp, status FROM messages WHERE room_id = ? ORDER BY timestamp ASC";
+        // Query both direct messages involving the peer, or messages for the specific room.
+        String selectSql = "SELECT id, sender_id, sender_name, recipient_id, room_id, text, timestamp, status FROM messages " +
+                           "WHERE room_id = ? OR sender_id = ? OR recipient_id = ? " +
+                           "ORDER BY timestamp ASC";
 
         try (Connection conn = DriverManager.getConnection(DB_URL);
              PreparedStatement pstmt = conn.prepareStatement(selectSql)) {
-            pstmt.setString(1, roomId);
+            pstmt.setString(1, peerOrRoomId);
+            pstmt.setString(2, peerOrRoomId);
+            pstmt.setString(3, peerOrRoomId);
             try (ResultSet rs = pstmt.executeQuery()) {
                 while (rs.next()) {
                     ChatMessage msg = new ChatMessage(
                             rs.getString("id"),
                             rs.getString("sender_id"),
                             rs.getString("sender_name"),
-                            null, // recipientId is null for room messages
+                            rs.getString("recipient_id"),
                             rs.getString("room_id"),
                             rs.getString("text"),
                             rs.getLong("timestamp"),

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <solid android:color="@color/bubble_received" />
+    <corners
+        android:topLeftRadius="0dp"
+        android:topRightRadius="12dp"
+        android:bottomLeftRadius="12dp"
+        android:bottomRightRadius="12dp" />
+    <padding android:left="8dp" android:top="8dp" android:right="8dp" android:bottom="8dp" />
+</shape>

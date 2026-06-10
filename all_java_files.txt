@@ -1,0 +1,4044 @@
+package com.voibiz.lanchat.core.model;
+
+/**
+ * Represents a discovered peer on the local network.
+ *
+ * <p>{@code Peer} extends {@link User} with presence-tracking fields: a
+ * {@link PeerStatus} indicating the peer's current availability and a
+ * {@code lastSeenTimestamp} recording when the peer was last heard from.
+ * Together these allow the application to detect stale (unresponsive) peers
+ * and update the UI accordingly.</p>
+ *
+ * @author Adi
+ * @see User
+ */
+public class Peer extends User {
+
+    /**
+     * Enumerates the possible presence states of a peer on the network.
+     */
+    public enum PeerStatus {
+        /** The peer is online and available. */
+        ONLINE,
+        /** The peer is online but temporarily away. */
+        AWAY,
+        /** The peer is online but busy and may not respond promptly. */
+        BUSY,
+        /** The peer is offline or unreachable. */
+        OFFLINE
+    }
+
+    /** Current presence status of this peer. */
+    private PeerStatus status;
+
+    /** Epoch millisecond timestamp of the last heartbeat or message from this peer. */
+    private long lastSeenTimestamp;
+
+    /**
+     * Constructs a new {@code Peer} with the specified identity, network details,
+     * and initial status. The {@code lastSeenTimestamp} is initialised to the
+     * current system time.
+     *
+     * @param userId      the unique identifier (UUID string)
+     * @param displayName the human-readable display name
+     * @param ipAddress   the IP address on the local network
+     * @param port        the listening port number
+     * @param status      the initial presence status
+     */
+    public Peer(String userId, String displayName, String ipAddress, int port, PeerStatus status) {
+        super(userId, displayName, ipAddress, port);
+        this.status = status;
+        this.lastSeenTimestamp = System.currentTimeMillis();
+    }
+
+    /**
+     * Returns the current presence status of this peer.
+     *
+     * @return the peer status
+     */
+    public PeerStatus getStatus() {
+        return status;
+    }
+
+    /**
+     * Sets the presence status of this peer.
+     *
+     * @param status the new peer status
+     */
+    public void setStatus(PeerStatus status) {
+        this.status = status;
+    }
+
+    /**
+     * Returns the epoch millisecond timestamp when this peer was last seen.
+     *
+     * @return the last-seen timestamp
+     */
+    public long getLastSeenTimestamp() {
+        return lastSeenTimestamp;
+    }
+
+    /**
+     * Sets the epoch millisecond timestamp when this peer was last seen.
+     *
+     * @param lastSeenTimestamp the last-seen timestamp
+     */
+    public void setLastSeenTimestamp(long lastSeenTimestamp) {
+        this.lastSeenTimestamp = lastSeenTimestamp;
+    }
+
+    /**
+     * Checks whether this peer should be considered stale (unresponsive).
+     *
+     * <p>A peer is stale if the elapsed time since its {@code lastSeenTimestamp}
+     * exceeds the given {@code timeoutMs} threshold.</p>
+     *
+     * @param timeoutMs the timeout threshold in milliseconds
+     * @return {@code true} if the peer has not been seen within the timeout window
+     */
+    public boolean isStale(long timeoutMs) {
+        return System.currentTimeMillis() - lastSeenTimestamp > timeoutMs;
+    }
+
+    /**
+     * Updates the {@code lastSeenTimestamp} to the current system time.
+     * Call this method whenever a heartbeat or message is received from the peer.
+     */
+    public void updateLastSeen() {
+        this.lastSeenTimestamp = System.currentTimeMillis();
+    }
+
+    /**
+     * Returns a string representation of this peer, including inherited user fields,
+     * status, and last-seen timestamp.
+     *
+     * @return a human-readable string describing this peer
+     */
+    @Override
+    public String toString() {
+        return "Peer{" +
+                "userId='" + getUserId() + '\'' +
+                ", displayName='" + getDisplayName() + '\'' +
+                ", ipAddress='" + getIpAddress() + '\'' +
+                ", port=" + getPort() +
+                ", status=" + status +
+                ", lastSeenTimestamp=" + lastSeenTimestamp +
+                '}';
+    }
+}
+package com.voibiz.lanchat.core.model;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+import java.util.UUID;
+
+/**
+ * Represents a chat room containing one or more members.
+ *
+ * <p>A {@code ChatRoom} can be either a <em>general</em> room (visible to all
+ * users on the network) or a <em>private</em> room (a direct conversation
+ * between specific peers). Use the static factory methods
+ * {@link #createGeneralRoom()} and {@link #createPrivateChat(String, String)}
+ * to create rooms with the appropriate defaults.</p>
+ *
+ * <p>Equality and hash code are based solely on {@code roomId}.</p>
+ *
+ * @author Adi
+ */
+public class ChatRoom {
+
+    /** Unique identifier for this chat room (UUID string). */
+    private String roomId;
+
+    /** Human-readable name of the chat room. */
+    private String name;
+
+    /** List of user IDs who are members of this room. */
+    private List<String> memberIds;
+
+    /** Whether this room is the default general/public room. */
+    private boolean isGeneral;
+
+    /**
+     * Constructs a new {@code ChatRoom} with all fields specified.
+     *
+     * @param roomId    the unique room identifier (UUID string)
+     * @param name      the human-readable room name
+     * @param memberIds the initial list of member user IDs (will be copied)
+     * @param isGeneral {@code true} if this is the general/public room
+     */
+    public ChatRoom(String roomId, String name, List<String> memberIds, boolean isGeneral) {
+        this.roomId = roomId;
+        this.name = name;
+        this.memberIds = new ArrayList<>(memberIds);
+        this.isGeneral = isGeneral;
+    }
+
+    /**
+     * Creates the default general chat room.
+     *
+     * <p>The returned room is named "General", has a freshly generated UUID,
+     * an empty member list, and {@code isGeneral} set to {@code true}.</p>
+     *
+     * @return a new general chat room
+     */
+    public static ChatRoom createGeneralRoom() {
+        return new ChatRoom(UUID.randomUUID().toString(), "General",
+                new ArrayList<>(), true);
+    }
+
+    /**
+     * Creates a private chat room for a direct conversation between two peers.
+     *
+     * <p>The room is named using the pattern {@code "DM-<peerId1>-<peerId2>"},
+     * pre-populated with both peer IDs, and {@code isGeneral} is set to
+     * {@code false}.</p>
+     *
+     * @param peerId1 the user ID of the first participant
+     * @param peerId2 the user ID of the second participant
+     * @return a new private chat room containing both peers
+     */
+    public static ChatRoom createPrivateChat(String peerId1, String peerId2) {
+        List<String> members = new ArrayList<>();
+        members.add(peerId1);
+        members.add(peerId2);
+        String roomName = "DM-" + peerId1 + "-" + peerId2;
+        return new ChatRoom(UUID.randomUUID().toString(), roomName, members, false);
+    }
+
+    /**
+     * Adds a user to this chat room if they are not already a member.
+     *
+     * @param userId the user ID to add
+     */
+    public void addMember(String userId) {
+        if (!memberIds.contains(userId)) {
+            memberIds.add(userId);
+        }
+    }
+
+    /**
+     * Removes a user from this chat room.
+     *
+     * @param userId the user ID to remove
+     */
+    public void removeMember(String userId) {
+        memberIds.remove(userId);
+    }
+
+    /**
+     * Checks whether a user is a member of this chat room.
+     *
+     * @param userId the user ID to check
+     * @return {@code true} if the user is a member of this room
+     */
+    public boolean isMember(String userId) {
+        return memberIds.contains(userId);
+    }
+
+    /**
+     * Returns the unique identifier for this room.
+     *
+     * @return the room ID (UUID string)
+     */
+    public String getRoomId() {
+        return roomId;
+    }
+
+    /**
+     * Sets the unique identifier for this room.
+     *
+     * @param roomId the room ID (UUID string)
+     */
+    public void setRoomId(String roomId) {
+        this.roomId = roomId;
+    }
+
+    /**
+     * Returns the human-readable name of this room.
+     *
+     * @return the room name
+     */
+    public String getName() {
+        return name;
+    }
+
+    /**
+     * Sets the human-readable name of this room.
+     *
+     * @param name the room name
+     */
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    /**
+     * Returns a copy of the member ID list for this room.
+     *
+     * @return a list of member user IDs
+     */
+    public List<String> getMemberIds() {
+        return new ArrayList<>(memberIds);
+    }
+
+    /**
+     * Replaces the member list for this room.
+     *
+     * @param memberIds the new list of member user IDs (will be copied)
+     */
+    public void setMemberIds(List<String> memberIds) {
+        this.memberIds = new ArrayList<>(memberIds);
+    }
+
+    /**
+     * Returns whether this room is the default general/public room.
+     *
+     * @return {@code true} if this is the general room
+     */
+    public boolean isGeneral() {
+        return isGeneral;
+    }
+
+    /**
+     * Sets whether this room is the default general/public room.
+     *
+     * @param isGeneral {@code true} to mark as the general room
+     */
+    public void setGeneral(boolean isGeneral) {
+        this.isGeneral = isGeneral;
+    }
+
+    /**
+     * Compares this room to another object for equality.
+     * Two rooms are considered equal if and only if they have the same {@code roomId}.
+     *
+     * @param o the object to compare with
+     * @return {@code true} if the other object is a {@code ChatRoom} with the same roomId
+     */
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+        ChatRoom chatRoom = (ChatRoom) o;
+        return Objects.equals(roomId, chatRoom.roomId);
+    }
+
+    /**
+     * Returns a hash code based on the {@code roomId}.
+     *
+     * @return the hash code
+     */
+    @Override
+    public int hashCode() {
+        return Objects.hash(roomId);
+    }
+
+    /**
+     * Returns a string representation of this room, including all fields.
+     *
+     * @return a human-readable string describing this room
+     */
+    @Override
+    public String toString() {
+        return "ChatRoom{" +
+                "roomId='" + roomId + '\'' +
+                ", name='" + name + '\'' +
+                ", memberIds=" + memberIds +
+                ", isGeneral=" + isGeneral +
+                '}';
+    }
+}
+package com.voibiz.lanchat.core.model;
+
+import java.util.Objects;
+import java.util.UUID;
+
+/**
+ * Represents a user in the LAN chat application.
+ *
+ * <p>Each user is uniquely identified by a {@code userId}, which is a UUID string.
+ * The user also carries network addressing information (IP address and port) used
+ * for peer-to-peer communication on the local network.</p>
+ *
+ * <p>Equality and hash code are based solely on {@code userId}, so two {@code User}
+ * instances with the same ID are considered equal regardless of other field values.</p>
+ *
+ * @author Adi
+ */
+public class User {
+
+    /** Unique identifier for this user (UUID string). */
+    private String userId;
+
+    /** Human-readable display name shown in the chat UI. */
+    private String displayName;
+
+    /** IP address of the user on the local network. */
+    private String ipAddress;
+
+    /** Port number the user is listening on for incoming connections. */
+    private int port;
+
+    /**
+     * Constructs a new {@code User} with all fields specified.
+     *
+     * @param userId      the unique identifier (UUID string)
+     * @param displayName the human-readable display name
+     * @param ipAddress   the IP address on the local network
+     * @param port        the listening port number
+     */
+    public User(String userId, String displayName, String ipAddress, int port) {
+        this.userId = userId;
+        this.displayName = displayName;
+        this.ipAddress = ipAddress;
+        this.port = port;
+    }
+
+    /**
+     * Constructs a new {@code User} with an auto-generated UUID, an empty IP address,
+     * and port set to {@code 0}. This is useful when creating a local user before
+     * network details are known.
+     *
+     * @param displayName the human-readable display name
+     */
+    public User(String displayName) {
+        this(UUID.randomUUID().toString(), displayName, "", 0);
+    }
+
+    /**
+     * Returns the unique identifier for this user.
+     *
+     * @return the user ID (UUID string)
+     */
+    public String getUserId() {
+        return userId;
+    }
+
+    /**
+     * Sets the unique identifier for this user.
+     *
+     * @param userId the user ID (UUID string)
+     */
+    public void setUserId(String userId) {
+        this.userId = userId;
+    }
+
+    /**
+     * Returns the display name of this user.
+     *
+     * @return the display name
+     */
+    public String getDisplayName() {
+        return displayName;
+    }
+
+    /**
+     * Sets the display name of this user.
+     *
+     * @param displayName the display name
+     */
+    public void setDisplayName(String displayName) {
+        this.displayName = displayName;
+    }
+
+    /**
+     * Returns the IP address of this user on the local network.
+     *
+     * @return the IP address
+     */
+    public String getIpAddress() {
+        return ipAddress;
+    }
+
+    /**
+     * Sets the IP address of this user on the local network.
+     *
+     * @param ipAddress the IP address
+     */
+    public void setIpAddress(String ipAddress) {
+        this.ipAddress = ipAddress;
+    }
+
+    /**
+     * Returns the port number this user is listening on.
+     *
+     * @return the port number
+     */
+    public int getPort() {
+        return port;
+    }
+
+    /**
+     * Sets the port number this user listens on.
+     *
+     * @param port the port number
+     */
+    public void setPort(int port) {
+        this.port = port;
+    }
+
+    /**
+     * Compares this user to another object for equality.
+     * Two users are considered equal if and only if they have the same {@code userId}.
+     *
+     * @param o the object to compare with
+     * @return {@code true} if the other object is a {@code User} with the same userId
+     */
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+        User user = (User) o;
+        return Objects.equals(userId, user.userId);
+    }
+
+    /**
+     * Returns a hash code based on the {@code userId}.
+     *
+     * @return the hash code
+     */
+    @Override
+    public int hashCode() {
+        return Objects.hash(userId);
+    }
+
+    /**
+     * Returns a string representation of this user, including all fields.
+     *
+     * @return a human-readable string describing this user
+     */
+    @Override
+    public String toString() {
+        return "User{" +
+                "userId='" + userId + '\'' +
+                ", displayName='" + displayName + '\'' +
+                ", ipAddress='" + ipAddress + '\'' +
+                ", port=" + port +
+                '}';
+    }
+}
+package com.voibiz.lanchat.core.model;
+
+import java.util.Objects;
+import java.util.UUID;
+
+/**
+ * Represents a single chat message exchanged between users.
+ *
+ * <p>Each message is uniquely identified by a {@code messageId} (UUID string) and
+ * carries sender/recipient addressing, the message text, a creation timestamp,
+ * and a {@link MessageStatus} tracking delivery progress.</p>
+ *
+ * <p>A message may target a specific recipient (direct message) or a chat room
+ * (group message). When sent to a room, {@code recipientId} is {@code null} and
+ * {@code roomId} identifies the destination.</p>
+ *
+ * <p>Equality and hash code are based solely on {@code messageId}.</p>
+ *
+ * @author Adi
+ */
+public class ChatMessage {
+
+    /**
+     * Enumerates the delivery lifecycle states of a chat message.
+     */
+    public enum MessageStatus {
+        /** The message is being transmitted to the recipient. */
+        SENDING,
+        /** The message has been sent to the network. */
+        SENT,
+        /** The message has been delivered to the recipient's device. */
+        DELIVERED,
+        /** The message has been read by the recipient. */
+        READ
+    }
+
+    /** Unique identifier for this message (UUID string). */
+    private String messageId;
+
+    /** User ID of the sender. */
+    private String senderId;
+
+    /** Display name of the sender at the time of sending. */
+    private String senderName;
+
+    /** User ID of the recipient, or {@code null} for room/group messages. */
+    private String recipientId;
+
+    /** ID of the chat room this message belongs to. */
+    private String roomId;
+
+    /** The textual content of the message. */
+    private String text;
+
+    /** Epoch millisecond timestamp when the message was created. */
+    private long timestamp;
+
+    /** Current delivery status of the message. */
+    private MessageStatus status;
+
+    /**
+     * Constructs a new {@code ChatMessage} with an auto-generated message ID
+     * and the current system time as the timestamp. The initial status is set
+     * to {@link MessageStatus#SENDING}.
+     *
+     * @param senderId    the user ID of the sender
+     * @param senderName  the display name of the sender
+     * @param recipientId the user ID of the recipient, or {@code null} for group messages
+     * @param roomId      the chat room ID
+     * @param text        the message text
+     */
+    public ChatMessage(String senderId, String senderName, String recipientId,
+                       String roomId, String text) {
+        this(UUID.randomUUID().toString(), senderId, senderName, recipientId,
+                roomId, text, System.currentTimeMillis(), MessageStatus.SENDING);
+    }
+
+    /**
+     * Constructs a {@code ChatMessage} with all fields explicitly specified.
+     * Use this constructor when reconstructing a message from storage or network data.
+     *
+     * @param messageId   the unique message identifier (UUID string)
+     * @param senderId    the user ID of the sender
+     * @param senderName  the display name of the sender
+     * @param recipientId the user ID of the recipient, or {@code null} for group messages
+     * @param roomId      the chat room ID
+     * @param text        the message text
+     * @param timestamp   the epoch millisecond creation timestamp
+     * @param status      the current delivery status
+     */
+    public ChatMessage(String messageId, String senderId, String senderName,
+                       String recipientId, String roomId, String text,
+                       long timestamp, MessageStatus status) {
+        this.messageId = messageId;
+        this.senderId = senderId;
+        this.senderName = senderName;
+        this.recipientId = recipientId;
+        this.roomId = roomId;
+        this.text = text;
+        this.timestamp = timestamp;
+        this.status = status;
+    }
+
+    /**
+     * Returns the unique identifier for this message.
+     *
+     * @return the message ID (UUID string)
+     */
+    public String getMessageId() {
+        return messageId;
+    }
+
+    /**
+     * Sets the unique identifier for this message.
+     *
+     * @param messageId the message ID (UUID string)
+     */
+    public void setMessageId(String messageId) {
+        this.messageId = messageId;
+    }
+
+    /**
+     * Returns the user ID of the sender.
+     *
+     * @return the sender's user ID
+     */
+    public String getSenderId() {
+        return senderId;
+    }
+
+    /**
+     * Sets the user ID of the sender.
+     *
+     * @param senderId the sender's user ID
+     */
+    public void setSenderId(String senderId) {
+        this.senderId = senderId;
+    }
+
+    /**
+     * Returns the display name of the sender.
+     *
+     * @return the sender's display name
+     */
+    public String getSenderName() {
+        return senderName;
+    }
+
+    /**
+     * Sets the display name of the sender.
+     *
+     * @param senderName the sender's display name
+     */
+    public void setSenderName(String senderName) {
+        this.senderName = senderName;
+    }
+
+    /**
+     * Returns the user ID of the recipient, or {@code null} if this is a group message.
+     *
+     * @return the recipient's user ID, or {@code null}
+     */
+    public String getRecipientId() {
+        return recipientId;
+    }
+
+    /**
+     * Sets the user ID of the recipient.
+     *
+     * @param recipientId the recipient's user ID, or {@code null} for group messages
+     */
+    public void setRecipientId(String recipientId) {
+        this.recipientId = recipientId;
+    }
+
+    /**
+     * Returns the ID of the chat room this message belongs to.
+     *
+     * @return the room ID
+     */
+    public String getRoomId() {
+        return roomId;
+    }
+
+    /**
+     * Sets the ID of the chat room this message belongs to.
+     *
+     * @param roomId the room ID
+     */
+    public void setRoomId(String roomId) {
+        this.roomId = roomId;
+    }
+
+    /**
+     * Returns the textual content of this message.
+     *
+     * @return the message text
+     */
+    public String getText() {
+        return text;
+    }
+
+    /**
+     * Sets the textual content of this message.
+     *
+     * @param text the message text
+     */
+    public void setText(String text) {
+        this.text = text;
+    }
+
+    /**
+     * Returns the epoch millisecond timestamp when this message was created.
+     *
+     * @return the creation timestamp
+     */
+    public long getTimestamp() {
+        return timestamp;
+    }
+
+    /**
+     * Sets the creation timestamp for this message.
+     *
+     * @param timestamp the epoch millisecond timestamp
+     */
+    public void setTimestamp(long timestamp) {
+        this.timestamp = timestamp;
+    }
+
+    /**
+     * Returns the current delivery status of this message.
+     *
+     * @return the message status
+     */
+    public MessageStatus getStatus() {
+        return status;
+    }
+
+    /**
+     * Sets the delivery status of this message.
+     *
+     * @param status the new message status
+     */
+    public void setStatus(MessageStatus status) {
+        this.status = status;
+    }
+
+    /**
+     * Compares this message to another object for equality.
+     * Two messages are considered equal if and only if they have the same {@code messageId}.
+     *
+     * @param o the object to compare with
+     * @return {@code true} if the other object is a {@code ChatMessage} with the same messageId
+     */
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+        ChatMessage that = (ChatMessage) o;
+        return Objects.equals(messageId, that.messageId);
+    }
+
+    /**
+     * Returns a hash code based on the {@code messageId}.
+     *
+     * @return the hash code
+     */
+    @Override
+    public int hashCode() {
+        return Objects.hash(messageId);
+    }
+
+    /**
+     * Returns a string representation of this message, including all fields.
+     *
+     * @return a human-readable string describing this message
+     */
+    @Override
+    public String toString() {
+        return "ChatMessage{" +
+                "messageId='" + messageId + '\'' +
+                ", senderId='" + senderId + '\'' +
+                ", senderName='" + senderName + '\'' +
+                ", recipientId='" + recipientId + '\'' +
+                ", roomId='" + roomId + '\'' +
+                ", text='" + text + '\'' +
+                ", timestamp=" + timestamp +
+                ", status=" + status +
+                '}';
+    }
+}
+package com.voibiz.lanchat.core.protocol;
+
+import com.google.gson.JsonObject;
+import com.voibiz.lanchat.core.model.User;
+
+import java.util.UUID;
+
+/**
+ * Represents a single message exchanged over the LAN Chat protocol.
+ *
+ * <p>Every protocol message carries a {@link #version protocol version},
+ * a {@link #type message type}, a unique {@link #messageId}, the
+ * {@link #sender} who originated it, a {@link #timestamp} in epoch
+ * milliseconds, and an optional JSON {@link #payload}.</p>
+ *
+ * <p>Use the factory method {@link #create(MessageType, User, JsonObject)}
+ * for convenient construction with auto-generated ID and timestamp.</p>
+ */
+public class ProtocolMessage {
+
+    /** Protocol version this message conforms to. */
+    private final int version;
+
+    /** The type of this protocol message. */
+    private final MessageType type;
+
+    /** Unique identifier for this message (UUID string). */
+    private final String messageId;
+
+    /** The user who sent this message. */
+    private final User sender;
+
+    /** Creation timestamp in epoch milliseconds. */
+    private final long timestamp;
+
+    /** Arbitrary JSON payload associated with this message; may be {@code null}. */
+    private final JsonObject payload;
+
+    /**
+     * Constructs a {@code ProtocolMessage} with all fields specified explicitly.
+     *
+     * @param version   protocol version
+     * @param type      message type, must not be {@code null}
+     * @param messageId unique message identifier (UUID string)
+     * @param sender    the user who sent this message, must not be {@code null}
+     * @param timestamp creation time in epoch milliseconds
+     * @param payload   optional JSON payload, may be {@code null}
+     */
+    public ProtocolMessage(int version,
+                           MessageType type,
+                           String messageId,
+                           User sender,
+                           long timestamp,
+                           JsonObject payload) {
+        this.version = version;
+        this.type = type;
+        this.messageId = messageId;
+        this.sender = sender;
+        this.timestamp = timestamp;
+        this.payload = payload;
+    }
+
+    /**
+     * Factory method that creates a new {@code ProtocolMessage} with an
+     * auto-generated UUID, the current system time, and the protocol
+     * version defined in {@link ProtocolConstants#PROTOCOL_VERSION}.
+     *
+     * @param type    message type, must not be {@code null}
+     * @param sender  the user who is sending this message, must not be {@code null}
+     * @param payload optional JSON payload, may be {@code null}
+     * @return a fully initialised {@code ProtocolMessage}
+     */
+    public static ProtocolMessage create(MessageType type, User sender, JsonObject payload) {
+        return new ProtocolMessage(
+                ProtocolConstants.PROTOCOL_VERSION,
+                type,
+                UUID.randomUUID().toString(),
+                sender,
+                System.currentTimeMillis(),
+                payload
+        );
+    }
+
+    // ── Getters ─────────────────────────────────────────────────────────
+
+    /**
+     * Returns the protocol version of this message.
+     *
+     * @return protocol version number
+     */
+    public int getVersion() {
+        return version;
+    }
+
+    /**
+     * Returns the type of this protocol message.
+     *
+     * @return the {@link MessageType}
+     */
+    public MessageType getType() {
+        return type;
+    }
+
+    /**
+     * Returns the unique identifier for this message.
+     *
+     * @return UUID string
+     */
+    public String getMessageId() {
+        return messageId;
+    }
+
+    /**
+     * Returns the user who sent this message.
+     *
+     * @return the {@link User} sender
+     */
+    public User getSender() {
+        return sender;
+    }
+
+    /**
+     * Returns the creation timestamp in epoch milliseconds.
+     *
+     * @return timestamp in milliseconds since the Unix epoch
+     */
+    public long getTimestamp() {
+        return timestamp;
+    }
+
+    /**
+     * Returns the optional JSON payload associated with this message.
+     *
+     * @return a {@link JsonObject}, or {@code null} if no payload was set
+     */
+    public JsonObject getPayload() {
+        return payload;
+    }
+
+    // ── Object overrides ────────────────────────────────────────────────
+
+    /**
+     * Returns a human-readable string representation useful for debugging.
+     *
+     * @return debug string containing all field values
+     */
+    @Override
+    public String toString() {
+        return "ProtocolMessage{" +
+                "version=" + version +
+                ", type=" + type +
+                ", messageId='" + messageId + '\'' +
+                ", sender=" + sender +
+                ", timestamp=" + timestamp +
+                ", payload=" + payload +
+                '}';
+    }
+}
+package com.voibiz.lanchat.core.protocol;
+
+/**
+ * Constants shared across the LAN Chat protocol layer.
+ *
+ * <p>This is a utility class and cannot be instantiated.</p>
+ *
+ * <h2>Port Assignments</h2>
+ * <ul>
+ *   <li>{@link #DISCOVERY_PORT} — UDP port used for peer discovery broadcasts</li>
+ *   <li>{@link #DEFAULT_TCP_PORT} — default TCP port for direct peer-to-peer communication</li>
+ * </ul>
+ *
+ * <h2>Timing</h2>
+ * <ul>
+ *   <li>{@link #HEARTBEAT_INTERVAL_MS} — interval between heartbeat broadcasts</li>
+ *   <li>{@link #PEER_TIMEOUT_MS} — duration after which a silent peer is considered offline</li>
+ * </ul>
+ */
+public final class ProtocolConstants {
+
+    // ── Port configuration ──────────────────────────────────────────────
+
+    /** UDP port used for broadcasting and receiving discovery messages. */
+    public static final int DISCOVERY_PORT = 50505;
+
+    /** Default TCP port for chat and file-transfer connections. */
+    public static final int DEFAULT_TCP_PORT = 50506;
+
+    // ── Timing ──────────────────────────────────────────────────────────
+
+    /** Interval in milliseconds between heartbeat / keep-alive broadcasts (5 seconds). */
+    public static final int HEARTBEAT_INTERVAL_MS = 5000;
+
+    /** Time in milliseconds after which a peer with no heartbeat is considered offline (15 seconds). */
+    public static final int PEER_TIMEOUT_MS = 15000;
+
+    // ── Protocol metadata ───────────────────────────────────────────────
+
+    /** Current version of the LAN Chat protocol. */
+    public static final int PROTOCOL_VERSION = 1;
+
+    /** Character encoding used for all protocol messages. */
+    public static final String CHARSET = "UTF-8";
+
+    // ── I/O ─────────────────────────────────────────────────────────────
+
+    /** Default buffer size in bytes for reading and writing network data. */
+    public static final int BUFFER_SIZE = 4096;
+
+    /**
+     * Private constructor to prevent instantiation of this utility class.
+     *
+     * @throws UnsupportedOperationException always
+     */
+    private ProtocolConstants() {
+        throw new UnsupportedOperationException("ProtocolConstants is a utility class and cannot be instantiated.");
+    }
+}
+package com.voibiz.lanchat.core.protocol;
+
+/**
+ * Defines all message types in the LAN Chat protocol.
+ *
+ * <p>Message types are grouped by their transport layer and functional category:</p>
+ * <ul>
+ *   <li><strong>Discovery (UDP)</strong> — peer announcement, response, and goodbye</li>
+ *   <li><strong>Chat (TCP)</strong> — chat messages and acknowledgements</li>
+ *   <li><strong>File Transfer (TCP)</strong> — file transfer negotiation</li>
+ *   <li><strong>Status (TCP/UDP)</strong> — typing indicators and presence updates</li>
+ * </ul>
+ */
+public enum MessageType {
+
+    // ── Discovery (UDP) ─────────────────────────────────────────────────
+
+    /** Broadcast announcement of a peer joining the network. */
+    DISCOVERY_ANNOUNCE,
+
+    /** Unicast response to a discovery announcement. */
+    DISCOVERY_RESPONSE,
+
+    /** Notification that a peer is leaving the network. */
+    DISCOVERY_GOODBYE,
+
+    // ── Handshake (TCP) ─────────────────────────────────────────────────
+
+    /** Initial handshake message sent upon TCP connection establishment. */
+    HELLO,
+
+    // ── Chat (TCP) ──────────────────────────────────────────────────────
+
+    /** A text chat message sent between peers. */
+    CHAT_MESSAGE,
+
+    /** Acknowledgement that a chat message was received. */
+    CHAT_ACK,
+
+    // ── File Transfer (TCP) ─────────────────────────────────────────────
+
+    /** Request to initiate a file transfer. */
+    FILE_TRANSFER_REQUEST,
+
+    /** Acceptance of a pending file transfer request. */
+    FILE_TRANSFER_ACCEPT,
+
+    /** Rejection of a pending file transfer request. */
+    FILE_TRANSFER_REJECT,
+
+    // ── Status (TCP/UDP) ────────────────────────────────────────────────
+
+    /** Indicator that a peer is currently typing. */
+    TYPING_INDICATOR,
+
+    /** Update to a peer's online/away/busy presence status. */
+    PRESENCE_UPDATE,
+
+    // ── Heartbeat (TCP) ─────────────────────────────────────────────────
+
+    /** Proactive ping to check if connection is alive. */
+    HEARTBEAT_PING,
+
+    /** Response to a ping to confirm connection is alive. */
+    HEARTBEAT_PONG,
+
+    // ── Message Receipts ────────────────────────────────────────────────
+
+    /** Sent automatically when a message is successfully received. */
+    MESSAGE_DELIVERED,
+
+    /** Sent when the user views the message. */
+    MESSAGE_READ
+}
+package com.voibiz.lanchat.core.serialization;
+
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonObject;
+import com.voibiz.lanchat.core.protocol.ProtocolMessage;
+
+/**
+ * Utility class for serializing and deserializing {@link ProtocolMessage} instances
+ * to and from single-line JSON strings using Gson.
+ *
+ * <p>This class is not instantiable. All methods are static and thread-safe,
+ * backed by a single shared {@link Gson} instance.</p>
+ *
+ * @author Adi
+ */
+public final class MessageSerializer {
+
+    /** Shared Gson instance used for all serialization operations. */
+    private static final Gson GSON = new GsonBuilder().create();
+
+    /**
+     * Private constructor to prevent instantiation of this utility class.
+     *
+     * @throws AssertionError always, if called via reflection
+     */
+    private MessageSerializer() {
+        throw new AssertionError("MessageSerializer is a utility class and cannot be instantiated.");
+    }
+
+    /**
+     * Serializes a {@link ProtocolMessage} into a single-line JSON string.
+     *
+     * @param msg the protocol message to serialize; must not be {@code null}
+     * @return a single-line JSON string representation of the message
+     */
+    public static String serialize(ProtocolMessage msg) {
+        return GSON.toJson(msg);
+    }
+
+    /**
+     * Deserializes a JSON string into a {@link ProtocolMessage}.
+     *
+     * @param json the JSON string to deserialize; must not be {@code null}
+     * @return the deserialized {@link ProtocolMessage}
+     */
+    public static ProtocolMessage deserialize(String json) {
+        return GSON.fromJson(json, ProtocolMessage.class);
+    }
+
+    /**
+     * Extracts a typed field from the payload {@link JsonObject} of a {@link ProtocolMessage}.
+     *
+     * <p>This is a convenience helper for pulling individual fields out of the
+     * protocol message's free-form payload without manually interacting with
+     * the {@link JsonObject} API.</p>
+     *
+     * @param <T>   the expected type of the field value
+     * @param msg   the protocol message whose payload to inspect; must not be {@code null}
+     * @param field the name of the field to extract from the payload
+     * @param clazz the {@link Class} object representing type {@code T}
+     * @return the field value deserialized as type {@code T}, or {@code null}
+     *         if the payload is {@code null} or the field is absent
+     */
+    public static <T> T extractPayloadField(ProtocolMessage msg, String field, Class<T> clazz) {
+        JsonObject payload = msg.getPayload();
+        if (payload == null || !payload.has(field)) {
+            return null;
+        }
+        return GSON.fromJson(payload.get(field), clazz);
+    }
+}
+package com.voibiz.lanchat.core.network;
+
+import com.voibiz.lanchat.core.protocol.ProtocolMessage;
+
+/**
+ * Handler interface for TCP messaging events.
+ *
+ * <p>Implementations receive callbacks when protocol messages arrive over
+ * established TCP connections, when peers connect, and when peers disconnect.
+ * All methods may be invoked from background reader threads; implementations
+ * must handle thread safety if interacting with UI or shared state.</p>
+ *
+ * @author Adi
+ */
+public interface TCPMessageHandler {
+
+    /**
+     * Called when a complete protocol message is received over a TCP connection.
+     *
+     * @param message the deserialized protocol message; never {@code null}
+     * @param peerId  the unique user ID of the peer that sent the message; never {@code null}
+     */
+    void onMessageReceived(ProtocolMessage message, String peerId);
+
+    /**
+     * Called when a TCP connection to a peer is successfully established,
+     * either by accepting an incoming connection or by initiating an outgoing one.
+     *
+     * @param peerId the unique user ID of the connected peer; never {@code null}
+     */
+    void onPeerConnected(String peerId);
+
+    /**
+     * Called when a TCP connection to a peer is lost or explicitly closed.
+     *
+     * @param peerId the unique user ID of the disconnected peer; never {@code null}
+     */
+    void onPeerDisconnected(String peerId);
+}
+package com.voibiz.lanchat.core.network;
+
+import com.voibiz.lanchat.core.model.Peer;
+
+/**
+ * Listener interface for peer discovery events on the local network.
+ *
+ * <p>Implementations receive callbacks when peers are discovered, updated, or
+ * lost via the UDP discovery mechanism. All methods may be invoked from
+ * background networking threads; implementations must handle thread safety
+ * if interacting with UI or shared state.</p>
+ *
+ * @author Adi
+ */
+public interface DiscoveryListener {
+
+    /**
+     * Called when a new peer is discovered on the network for the first time.
+     *
+     * @param peer the newly discovered peer; never {@code null}
+     */
+    void onPeerDiscovered(Peer peer);
+
+    /**
+     * Called when an already-known peer sends an updated heartbeat or status change.
+     *
+     * @param peer the updated peer with refreshed fields (e.g., lastSeen); never {@code null}
+     */
+    void onPeerUpdated(Peer peer);
+
+    /**
+     * Called when a peer is no longer reachable — either by graceful goodbye
+     * or by stale-peer eviction after a heartbeat timeout.
+     *
+     * @param peer the peer that was lost; never {@code null}
+     */
+    void onPeerLost(Peer peer);
+}
+package com.voibiz.lanchat.core.network;
+
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
+import com.voibiz.lanchat.core.model.Peer;
+
+import java.io.File;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
+
+/**
+ * Persistently stores known peers to bypass mDNS discovery delay on startup.
+ */
+public class KnownPeerCache {
+    private final File storageFile;
+    private final Gson gson = new Gson();
+    private final ConcurrentHashMap<String, Peer> knownPeers = new ConcurrentHashMap<>();
+
+    public KnownPeerCache(File storageFile) {
+        this.storageFile = storageFile;
+        load();
+    }
+
+    private void load() {
+        if (!storageFile.exists()) {
+            return;
+        }
+        try (FileReader reader = new FileReader(storageFile)) {
+            java.lang.reflect.Type type = new TypeToken<List<Peer>>(){}.getType();
+            List<Peer> peers = gson.fromJson(reader, type);
+            if (peers != null) {
+                for (Peer p : peers) {
+                    knownPeers.put(p.getUserId(), p);
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("[KnownPeerCache] Failed to load known peers: " + e.getMessage());
+        }
+    }
+
+    private synchronized void save() {
+        try (FileWriter writer = new FileWriter(storageFile)) {
+            List<Peer> list = new ArrayList<>(knownPeers.values());
+            gson.toJson(list, writer);
+        } catch (IOException e) {
+            System.err.println("[KnownPeerCache] Failed to save known peers: " + e.getMessage());
+        }
+    }
+
+    public void addPeer(Peer peer) {
+        if (peer == null || peer.getIpAddress() == null || peer.getIpAddress().isEmpty()) {
+            return;
+        }
+        knownPeers.put(peer.getUserId(), peer);
+        save();
+    }
+
+    public List<Peer> getKnownPeers() {
+        return new ArrayList<>(knownPeers.values());
+    }
+}
+package com.voibiz.lanchat.core.network;
+
+import com.voibiz.lanchat.core.model.Peer;
+import com.voibiz.lanchat.core.model.User;
+
+import javax.jmdns.JmDNS;
+import javax.jmdns.ServiceEvent;
+import javax.jmdns.ServiceInfo;
+import javax.jmdns.ServiceListener;
+import java.io.IOException;
+import java.net.InetAddress;
+
+public class JmDNSDiscoveryService implements DiscoveryService {
+    public static final String SERVICE_TYPE = "_lanchat._tcp.local.";
+    
+    private final User localUser;
+    private final PeerRegistry registry;
+    private JmDNS jmdns;
+
+    public JmDNSDiscoveryService(User localUser, PeerRegistry registry) {
+        this.localUser = localUser;
+        this.registry = registry;
+    }
+
+    @Override
+    public void start() throws IOException {
+        InetAddress address = getLocalIpAddress();
+        if (address == null) {
+            address = InetAddress.getLocalHost();
+        }
+        jmdns = JmDNS.create(address);
+
+        ServiceInfo serviceInfo = ServiceInfo.create(
+                SERVICE_TYPE,
+                localUser.getUserId(),
+                50506, // Default TCP Port
+                0, 0,
+                "name=" + localUser.getDisplayName()
+        );
+        jmdns.registerService(serviceInfo);
+
+        jmdns.addServiceListener(SERVICE_TYPE, new ServiceListener() {
+            @Override
+            public void serviceAdded(ServiceEvent event) {
+                jmdns.requestServiceInfo(event.getType(), event.getName(), 1);
+            }
+
+            @Override
+            public void serviceRemoved(ServiceEvent event) {
+                if (event.getName().equals(localUser.getUserId())) return;
+                registry.removePeer(event.getName());
+            }
+
+            @Override
+            public void serviceResolved(ServiceEvent event) {
+                if (event.getName().equals(localUser.getUserId())) return;
+
+                ServiceInfo info = event.getInfo();
+                if (info != null) {
+                    String displayName = info.getPropertyString("name");
+                    if (displayName == null) displayName = event.getName();
+                    
+                    String[] ips = info.getHostAddresses();
+                    if (ips.length > 0) {
+                        Peer peer = new Peer(
+                                event.getName(),
+                                displayName,
+                                ips[0],
+                                info.getPort(),
+                                Peer.PeerStatus.ONLINE
+                        );
+                        registry.addOrUpdatePeer(peer);
+                    }
+                }
+            }
+        });
+    }
+
+    @Override
+    public void stop() {
+        if (jmdns != null) {
+            jmdns.unregisterAllServices();
+            try {
+                jmdns.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    @Override
+    public void silentRefresh() {
+        if (jmdns != null) {
+            new Thread(() -> {
+                // Calling list() forces JmDNS to actively query the network for this type
+                jmdns.list(SERVICE_TYPE, 1500);
+            }).start();
+        }
+    }
+
+    private InetAddress getLocalIpAddress() {
+        try {
+            java.util.Enumeration<java.net.NetworkInterface> en = java.net.NetworkInterface.getNetworkInterfaces();
+            while (en.hasMoreElements()) {
+                java.net.NetworkInterface intf = en.nextElement();
+                String name = intf.getName().toLowerCase();
+                if (name.startsWith("docker") || name.startsWith("virbr") || name.startsWith("br-") || name.startsWith("veth") || name.startsWith("tun") || name.startsWith("tap")) {
+                    continue;
+                }
+                
+                java.util.Enumeration<InetAddress> enumIpAddr = intf.getInetAddresses();
+                while (enumIpAddr.hasMoreElements()) {
+                    InetAddress inetAddress = enumIpAddr.nextElement();
+                    if (!inetAddress.isLoopbackAddress() && inetAddress instanceof java.net.Inet4Address) {
+                        return inetAddress;
+                    }
+                }
+            }
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+        return null;
+    }
+}
+package com.voibiz.lanchat.core.network;
+
+import com.voibiz.lanchat.core.model.User;
+import com.voibiz.lanchat.core.protocol.MessageType;
+import com.voibiz.lanchat.core.protocol.ProtocolMessage;
+import com.voibiz.lanchat.core.serialization.MessageSerializer;
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.PrintWriter;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.net.SocketException;
+import java.nio.charset.StandardCharsets;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+
+/**
+ * Manages TCP connections to and from peers for reliable message delivery.
+ *
+ * <p>This class maintains a {@link ServerSocket} that accepts incoming peer
+ * connections and a {@link ConcurrentHashMap} of active connections keyed by
+ * peer user ID. Messages are sent as single-line JSON strings terminated by
+ * a newline character, enabling simple {@link BufferedReader#readLine()} parsing
+ * on the receiving end.</p>
+ *
+ * <p>All reader and acceptor threads are created as daemon threads so they do
+ * not prevent JVM shutdown.</p>
+ *
+ * @author Adi
+ */
+public class TCPConnectionManager {
+
+    /** The local user identity, used to identify outgoing connections. */
+    private final User localUser;
+
+    /** The handler that receives TCP message and connection events. */
+    private final TCPMessageHandler handler;
+
+    /** The port on which the server socket listens for incoming connections. */
+    private final int port;
+
+    /** The server socket accepting incoming peer connections. */
+    private ServerSocket serverSocket;
+
+    /** Map of peerId → active connection info. */
+    private final ConcurrentHashMap<String, ConnectionInfo> connections = new ConcurrentHashMap<>();
+
+    /** Scheduler for the heartbeat mechanism. */
+    private ScheduledExecutorService heartbeatScheduler;
+
+    /**
+     * Constructs a new {@code TCPConnectionManager}.
+     *
+     * @param localUser the local user identity; must not be {@code null}
+     * @param handler   the handler for incoming messages and connection events;
+     *                  must not be {@code null}
+     * @param port      the TCP port to listen on for incoming connections
+     */
+    public TCPConnectionManager(User localUser, TCPMessageHandler handler, int port) {
+        this.localUser = localUser;
+        this.handler = handler;
+        this.port = port;
+    }
+
+    /**
+     * Starts the TCP server by opening a {@link ServerSocket} and launching
+     * a daemon acceptor thread that listens for incoming peer connections.
+     *
+     * <p>For each accepted connection, the first line is read to identify the
+     * peer (via the sender field of the initial {@link ProtocolMessage}), then
+     * a reader thread is spawned for ongoing message reception.</p>
+     *
+     * @throws IOException if the server socket cannot be created
+     */
+    public void start() throws IOException {
+        serverSocket = new ServerSocket(port);
+
+        Thread acceptorThread = new Thread(this::runAcceptor, "TCP-Connection-Acceptor");
+        acceptorThread.setDaemon(true);
+        acceptorThread.start();
+
+        heartbeatScheduler = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "TCP-Heartbeat");
+            t.setDaemon(true);
+            return t;
+        });
+        heartbeatScheduler.scheduleAtFixedRate(this::checkHeartbeats, 10, 10, TimeUnit.SECONDS);
+    }
+
+    /**
+     * Sends a {@link ProtocolMessage} to a specific peer.
+     *
+     * <p>If an active connection to the peer exists, the message is serialized
+     * and sent immediately. If no connection exists, this method logs an error;
+     * callers should use {@link #connectToPeer(String, String, int)} first.</p>
+     *
+     * @param peerId  the unique user ID of the target peer; must not be {@code null}
+     * @param message the protocol message to send; must not be {@code null}
+     */
+    public void sendMessage(String peerId, ProtocolMessage message) {
+        ConnectionInfo info = connections.get(peerId);
+        if (info != null) {
+            String json = MessageSerializer.serialize(message);
+            info.writer.println(json);
+            System.out.println("[TCPManager] Sent message to peer " + peerId + " of type " + message.getType());
+        } else {
+            System.err.println("[TCPManager] No active connection to peer: " + peerId
+                    + ". Use connectToPeer() first.");
+        }
+    }
+
+    /**
+     * Establishes an outgoing TCP connection to a peer.
+     *
+     * <p>Creates a new {@link Socket} to the specified IP and port, stores the
+     * connection, sends an initial identification message so the remote peer
+     * knows who connected, and starts a reader thread for incoming messages.</p>
+     *
+     * @param peerId the unique user ID of the peer to connect to; must not be {@code null}
+     * @param ip     the IP address of the peer; must not be {@code null}
+     * @param port   the TCP port of the peer
+     * @throws IOException if the connection cannot be established
+     */
+    public void connectToPeer(String peerId, String ip, int port) throws IOException {
+        // Don't create a duplicate connection
+        if (connections.containsKey(peerId)) {
+            return;
+        }
+
+        System.out.println("[TCPManager] Attempting to connect to peer " + peerId + " at " + ip + ":" + port);
+        Socket socket = new Socket(ip, port);
+        PrintWriter writer = new PrintWriter(
+                new java.io.OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8), true);
+
+        ConnectionInfo info = new ConnectionInfo(socket, writer, peerId);
+        connections.put(peerId, info);
+
+        System.out.println("[TCPManager] Successfully connected to peer " + peerId);
+
+        // Send an initial identification message so the remote peer knows who we are
+        ProtocolMessage identMessage = ProtocolMessage.create(MessageType.HELLO, localUser, null);
+        writer.println(MessageSerializer.serialize(identMessage));
+
+        handler.onPeerConnected(peerId);
+        startReaderThread(peerId, socket);
+    }
+
+    /**
+     * Disconnects from a specific peer, closing the socket and removing the
+     * connection from the active connections map.
+     *
+     * @param peerId the unique user ID of the peer to disconnect from;
+     *               must not be {@code null}
+     */
+    public void disconnectPeer(String peerId) {
+        ConnectionInfo info = connections.remove(peerId);
+        if (info != null) {
+            try {
+                if (!info.socket.isClosed()) {
+                    info.socket.close();
+                }
+            } catch (IOException e) {
+                System.err.println("[TCPManager] Error closing socket for peer " + peerId
+                        + ": " + e.getMessage());
+            }
+            handler.onPeerDisconnected(peerId);
+        }
+    }
+
+    /**
+     * Stops the TCP connection manager by closing all active peer connections
+     * and the server socket.
+     */
+    public void stop() {
+        // Close all active connections
+        for (String peerId : connections.keySet()) {
+            ConnectionInfo info = connections.remove(peerId);
+            if (info != null) {
+                try {
+                    if (!info.socket.isClosed()) {
+                        info.socket.close();
+                    }
+                } catch (IOException e) {
+                    System.err.println("[TCPManager] Error closing connection to peer "
+                            + peerId + ": " + e.getMessage());
+                }
+            }
+        }
+
+        // Close the server socket
+        if (serverSocket != null && !serverSocket.isClosed()) {
+            try {
+                serverSocket.close();
+            } catch (IOException e) {
+                System.err.println("[TCPManager] Error closing server socket: " + e.getMessage());
+            }
+        }
+
+        if (heartbeatScheduler != null) {
+            heartbeatScheduler.shutdownNow();
+        }
+    }
+
+    /**
+     * Acceptor loop that listens for incoming TCP connections on the server socket.
+     *
+     * <p>For each accepted connection, the first line is read to extract the
+     * sender's identity from the initial {@link ProtocolMessage}. The connection
+     * is then stored and a reader thread is started.</p>
+     */
+    private void runAcceptor() {
+        while (!serverSocket.isClosed()) {
+            try {
+                Socket clientSocket = serverSocket.accept();
+
+                // Read the first line to identify the peer
+                BufferedReader reader = new BufferedReader(
+                        new InputStreamReader(clientSocket.getInputStream(), StandardCharsets.UTF_8));
+                String firstLine = reader.readLine();
+
+                if (firstLine == null || firstLine.isEmpty()) {
+                    clientSocket.close();
+                    continue;
+                }
+
+                ProtocolMessage firstMessage = MessageSerializer.deserialize(firstLine);
+                if (firstMessage == null || firstMessage.getSender() == null) {
+                    clientSocket.close();
+                    continue;
+                }
+
+                String peerId = firstMessage.getSender().getUserId();
+                PrintWriter writer = new PrintWriter(
+                        new java.io.OutputStreamWriter(clientSocket.getOutputStream(), StandardCharsets.UTF_8), true);
+
+                ConnectionInfo info = new ConnectionInfo(clientSocket, writer, peerId);
+                connections.put(peerId, info);
+
+                System.out.println("[TCPManager] Accepted incoming connection from peer: " + peerId + " (" + clientSocket.getInetAddress().getHostAddress() + ")");
+
+                // Reply with our own HELLO
+                ProtocolMessage identReply = ProtocolMessage.create(MessageType.HELLO, localUser, null);
+                writer.println(MessageSerializer.serialize(identReply));
+
+                handler.onPeerConnected(peerId);
+                handler.onMessageReceived(firstMessage, peerId);
+
+                // Start a reader thread for subsequent messages, reusing the
+                // existing BufferedReader that already consumed the first line
+                startReaderThreadWithReader(peerId, clientSocket, reader);
+
+            } catch (SocketException e) {
+                if (!serverSocket.isClosed()) {
+                    System.err.println("[TCPManager] Acceptor socket error: " + e.getMessage());
+                }
+                break;
+            } catch (IOException e) {
+                if (!serverSocket.isClosed()) {
+                    System.err.println("[TCPManager] Acceptor I/O error: " + e.getMessage());
+                }
+            } catch (Exception e) {
+                System.err.println("[TCPManager] Acceptor unexpected error: " + e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * Starts a daemon reader thread for an outgoing connection.
+     * Creates a new {@link BufferedReader} from the socket's input stream.
+     *
+     * @param peerId the peer's unique user ID
+     * @param socket the connected socket to read from
+     */
+    private void startReaderThread(String peerId, Socket socket) {
+        Thread readerThread = new Thread(() -> {
+            try {
+                BufferedReader reader = new BufferedReader(
+                        new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
+                readLoop(peerId, reader);
+            } catch (IOException e) {
+                if (!socket.isClosed()) {
+                    System.err.println("[TCPManager] Reader thread setup error for peer "
+                            + peerId + ": " + e.getMessage());
+                }
+                disconnectPeer(peerId);
+            }
+        }, "TCP-Reader-" + peerId);
+        readerThread.setDaemon(true);
+        readerThread.start();
+    }
+
+    /**
+     * Starts a daemon reader thread for an accepted (incoming) connection,
+     * reusing an existing {@link BufferedReader} that has already consumed
+     * the first identification line.
+     *
+     * @param peerId the peer's unique user ID
+     * @param socket the connected socket
+     * @param reader the buffered reader already associated with the socket's input stream
+     */
+    private void startReaderThreadWithReader(String peerId, Socket socket, BufferedReader reader) {
+        Thread readerThread = new Thread(() -> readLoop(peerId, reader),
+                "TCP-Reader-" + peerId);
+        readerThread.setDaemon(true);
+        readerThread.start();
+    }
+
+    /**
+     * Continuously reads lines from the given reader, deserializes each line
+     * into a {@link ProtocolMessage}, and dispatches to the handler.
+     *
+     * <p>On {@link IOException} (e.g., connection reset), the peer is
+     * disconnected via {@link #disconnectPeer(String)}.</p>
+     *
+     * @param peerId the peer's unique user ID
+     * @param reader the buffered reader to read lines from
+     */
+    private void readLoop(String peerId, BufferedReader reader) {
+        try {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                if (line.isEmpty()) {
+                    continue;
+                }
+                try {
+                    ProtocolMessage message = MessageSerializer.deserialize(line);
+                    if (message != null) {
+                        ConnectionInfo info = connections.get(peerId);
+                        if (info != null) {
+                            info.lastActivityTime = System.currentTimeMillis();
+                        }
+
+                        if (message.getType() == MessageType.HEARTBEAT_PING) {
+                            // Reply with PONG
+                            ProtocolMessage pong = ProtocolMessage.create(MessageType.HEARTBEAT_PONG, localUser, null);
+                            if (info != null) {
+                                info.writer.println(MessageSerializer.serialize(pong));
+                            }
+                        } else if (message.getType() == MessageType.HEARTBEAT_PONG) {
+                            // Already updated lastActivityTime, do nothing else
+                        } else if (message.getType() == MessageType.HELLO) {
+                            System.out.println("[TCPManager] Received HELLO from peer " + peerId);
+                            handler.onMessageReceived(message, peerId);
+                        } else {
+                            System.out.println("[TCPManager] Received message from peer " + peerId + " of type " + message.getType());
+                            handler.onMessageReceived(message, peerId);
+                        }
+                    }
+                } catch (Exception e) {
+                    System.err.println("[TCPManager] Failed to deserialize message from peer "
+                            + peerId + ": " + e.getMessage());
+                }
+            }
+        } catch (IOException e) {
+            // Connection lost
+            if (connections.containsKey(peerId)) {
+                System.err.println("[TCPManager] Connection lost to peer " + peerId
+                        + ": " + e.getMessage());
+            }
+        }
+        disconnectPeer(peerId);
+    }
+
+    private void checkHeartbeats() {
+        long now = System.currentTimeMillis();
+        for (String peerId : connections.keySet()) {
+            ConnectionInfo info = connections.get(peerId);
+            if (info != null) {
+                if (now - info.lastActivityTime > 25000) {
+                    System.err.println("[TCPManager] Peer " + peerId + " heartbeat timeout. Disconnecting.");
+                    disconnectPeer(peerId);
+                } else {
+                    ProtocolMessage ping = ProtocolMessage.create(MessageType.HEARTBEAT_PING, localUser, null);
+                    info.writer.println(MessageSerializer.serialize(ping));
+                }
+            }
+        }
+    }
+
+    /**
+     * Holds the state for a single TCP connection to a peer.
+     */
+    private static class ConnectionInfo {
+
+        /** The underlying TCP socket. */
+        final Socket socket;
+
+        /** The writer for sending JSON lines to the peer (autoFlush enabled). */
+        final PrintWriter writer;
+
+        /** The unique user ID of the connected peer. */
+        final String peerId;
+
+        /** Timestamp of the last received message from this peer. */
+        volatile long lastActivityTime;
+
+        /**
+         * Constructs a new {@code ConnectionInfo}.
+         *
+         * @param socket the TCP socket; must not be {@code null}
+         * @param writer the print writer for the socket's output stream; must not be {@code null}
+         * @param peerId the peer's unique user ID; must not be {@code null}
+         */
+        ConnectionInfo(Socket socket, PrintWriter writer, String peerId) {
+            this.socket = socket;
+            this.writer = writer;
+            this.peerId = peerId;
+            this.lastActivityTime = System.currentTimeMillis();
+        }
+    }
+}
+package com.voibiz.lanchat.core.network;
+
+import java.io.IOException;
+
+/**
+ * Common interface for peer discovery services.
+ */
+public interface DiscoveryService {
+    /**
+     * Starts the discovery service.
+     * @throws IOException if an error occurs while starting
+     */
+    void start() throws IOException;
+
+    /**
+     * Stops the discovery service and cleans up resources.
+     */
+    void stop();
+    /**
+     * Silently requests a network refresh without unregistering the local service.
+     */
+    void silentRefresh();
+}
+package com.voibiz.lanchat.core.network;
+
+import com.voibiz.lanchat.core.model.Peer;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
+
+/**
+ * Thread-safe registry of discovered peers on the local network.
+ *
+ * <p>Maintains a {@link ConcurrentHashMap} keyed by user ID, providing
+ * concurrent add, update, remove, and query operations. When a
+ * {@link DiscoveryListener} is registered, the registry fires appropriate
+ * callbacks on peer state changes.</p>
+ *
+ * <p>Stale peers (those whose {@code lastSeenTimestamp} exceeds a given
+ * timeout) can be evicted in bulk via {@link #evictStalePeers(long)}.</p>
+ *
+ * @author Adi
+ */
+public class PeerRegistry {
+
+    /** Internal map of userId → Peer. */
+    private final ConcurrentHashMap<String, Peer> peers = new ConcurrentHashMap<>();
+
+    /** Optional listener for discovery events; may be {@code null}. */
+    private DiscoveryListener listener;
+
+    /**
+     * Constructs a new, empty {@code PeerRegistry} with no listener.
+     */
+    public PeerRegistry() {
+        // default — no listener
+    }
+
+    /**
+     * Returns the currently registered {@link DiscoveryListener}, or {@code null}.
+     *
+     * @return the current listener, or {@code null} if none is set
+     */
+    public DiscoveryListener getListener() {
+        return listener;
+    }
+
+    /**
+     * Sets the {@link DiscoveryListener} to receive peer lifecycle callbacks.
+     *
+     * @param listener the listener to register, or {@code null} to unregister
+     */
+    public void setListener(DiscoveryListener listener) {
+        this.listener = listener;
+    }
+
+    /**
+     * Adds a new peer or updates an existing peer in the registry.
+     *
+     * <p>If the peer's {@code userId} is not yet present, the peer is inserted
+     * and {@link DiscoveryListener#onPeerDiscovered(Peer)} is fired. If the
+     * peer already exists, the existing entry's {@code lastSeenTimestamp} and
+     * {@code status} fields are updated and
+     * {@link DiscoveryListener#onPeerUpdated(Peer)} is fired.</p>
+     *
+     * @param peer the peer to add or update; must not be {@code null}
+     */
+    public void addOrUpdatePeer(Peer peer) {
+        Peer existing = peers.get(peer.getUserId());
+        if (existing == null) {
+            peers.put(peer.getUserId(), peer);
+            DiscoveryListener currentListener = listener;
+            if (currentListener != null) {
+                currentListener.onPeerDiscovered(peer);
+            }
+        } else {
+            existing.updateLastSeen();
+            existing.setStatus(peer.getStatus());
+            if (peer.getDisplayName() != null) {
+                existing.setDisplayName(peer.getDisplayName());
+            }
+            DiscoveryListener currentListener = listener;
+            if (currentListener != null) {
+                currentListener.onPeerUpdated(existing);
+            }
+        }
+    }
+
+    /**
+     * Removes a peer from the registry by user ID.
+     *
+     * <p>If the peer was present, {@link DiscoveryListener#onPeerLost(Peer)}
+     * is fired with the removed peer.</p>
+     *
+     * @param userId the unique user ID of the peer to remove; must not be {@code null}
+     */
+    public void removePeer(String userId) {
+        Peer removed = peers.remove(userId);
+        if (removed != null) {
+            DiscoveryListener currentListener = listener;
+            if (currentListener != null) {
+                currentListener.onPeerLost(removed);
+            }
+        }
+    }
+
+    /**
+     * Retrieves a peer by user ID.
+     *
+     * @param userId the unique user ID to look up; must not be {@code null}
+     * @return the {@link Peer} if found, or {@code null} if no peer with that ID exists
+     */
+    public Peer getPeer(String userId) {
+        return peers.get(userId);
+    }
+
+    /**
+     * Returns a snapshot copy of all currently registered peers.
+     *
+     * <p>The returned list is a new {@link ArrayList} and can be modified
+     * freely without affecting the registry.</p>
+     *
+     * @return a snapshot list of all peers; never {@code null}
+     */
+    public List<Peer> getAllPeers() {
+        return new ArrayList<>(peers.values());
+    }
+
+    /**
+     * Returns a snapshot of all peers whose status is not
+     * {@link Peer.PeerStatus#OFFLINE}.
+     *
+     * @return a list of online (non-offline) peers; never {@code null}
+     */
+    public List<Peer> getOnlinePeers() {
+        List<Peer> onlinePeers = new ArrayList<>();
+        for (Peer peer : peers.values()) {
+            if (peer.getStatus() != Peer.PeerStatus.OFFLINE) {
+                onlinePeers.add(peer);
+            }
+        }
+        return onlinePeers;
+    }
+
+    /**
+     * Evicts all peers whose {@code lastSeenTimestamp} is older than
+     * {@code System.currentTimeMillis() - timeoutMs}.
+     *
+     * <p>For each evicted peer, {@link DiscoveryListener#onPeerLost(Peer)}
+     * is fired.</p>
+     *
+     * @param timeoutMs the staleness threshold in milliseconds; peers not seen
+     *                  within this window are evicted
+     * @return a list of peers that were evicted; never {@code null}
+     */
+    public List<Peer> evictStalePeers(long timeoutMs) {
+        List<Peer> evicted = new ArrayList<>();
+        for (Peer peer : peers.values()) {
+            if (peer.isStale(timeoutMs)) {
+                Peer removed = peers.remove(peer.getUserId());
+                if (removed != null) {
+                    evicted.add(removed);
+                    DiscoveryListener currentListener = listener;
+                    if (currentListener != null) {
+                        currentListener.onPeerLost(removed);
+                    }
+                }
+            }
+        }
+        return evicted;
+    }
+}
+package com.voibiz.lanchat.desktop;
+
+import atlantafx.base.theme.PrimerDark;
+import javafx.application.Application;
+import javafx.fxml.FXMLLoader;
+import javafx.scene.Parent;
+import javafx.scene.Scene;
+import javafx.stage.Stage;
+
+public class App extends Application {
+
+    @Override
+    public void start(Stage primaryStage) throws Exception {
+        Application.setUserAgentStylesheet(new PrimerDark().getUserAgentStylesheet());
+        
+        FXMLLoader loader = new FXMLLoader(getClass().getResource("/fxml/login.fxml"));
+        Parent root = loader.load();
+        
+        Scene scene = new Scene(root, 400, 400);
+        primaryStage.setTitle("LAN Chat");
+        primaryStage.setScene(scene);
+        primaryStage.show();
+    }
+
+    public static void main(String[] args) {
+        launch(args);
+    }
+}
+package com.voibiz.lanchat.desktop.component;
+
+import com.voibiz.lanchat.core.model.ChatMessage;
+import javafx.geometry.Pos;
+import javafx.scene.control.Label;
+import javafx.scene.layout.HBox;
+
+public class ChatBubble extends HBox {
+
+    private final ChatMessage message;
+    private final boolean isSentByMe;
+    private final Label statusLabel;
+
+    public ChatBubble(ChatMessage message, boolean isSentByMe) {
+        super();
+        this.message = message;
+        this.isSentByMe = isSentByMe;
+        
+        this.getStyleClass().add("chat-bubble-container");
+        
+        javafx.scene.layout.VBox bubbleContainer = new javafx.scene.layout.VBox();
+        bubbleContainer.setSpacing(2);
+        if (isSentByMe) {
+            bubbleContainer.getStyleClass().add("chat-bubble-sent");
+        } else {
+            bubbleContainer.getStyleClass().add("chat-bubble-received");
+        }
+        
+        Label messageLabel = new Label(message.getText());
+        messageLabel.setWrapText(true);
+        messageLabel.getStyleClass().add("chat-text");
+        messageLabel.setMaxWidth(400); // Prevent extremely wide bubbles
+        
+        HBox metaBox = new HBox();
+        metaBox.setAlignment(Pos.CENTER_RIGHT);
+        metaBox.setSpacing(4);
+        
+        // Very simple timestamp format using java.util.Date
+        String timeStr = new java.text.SimpleDateFormat("HH:mm").format(new java.util.Date(message.getTimestamp()));
+        Label timeLabel = new Label(timeStr);
+        timeLabel.getStyleClass().add("chat-meta");
+        
+        statusLabel = new Label();
+        statusLabel.getStyleClass().add("chat-meta");
+        
+        if (isSentByMe) {
+            metaBox.getChildren().addAll(timeLabel, statusLabel);
+        } else {
+            metaBox.getChildren().add(timeLabel);
+        }
+        
+        bubbleContainer.getChildren().addAll(messageLabel, metaBox);
+        
+        if (isSentByMe) {
+            this.setAlignment(Pos.CENTER_RIGHT);
+        } else {
+            this.setAlignment(Pos.CENTER_LEFT);
+        }
+        
+        this.getChildren().add(bubbleContainer);
+        updateStatus();
+    }
+
+    public void updateStatus() {
+        if (!isSentByMe) return;
+        switch (message.getStatus()) {
+            case SENDING: statusLabel.setText(""); break;
+            case SENT: statusLabel.setText("✓"); statusLabel.setStyle("-fx-text-fill: #667781;"); break;
+            case DELIVERED: statusLabel.setText("✓✓"); statusLabel.setStyle("-fx-text-fill: #667781;"); break;
+            case READ: statusLabel.setText("✓✓"); statusLabel.setStyle("-fx-text-fill: #53bdeb;"); break;
+        }
+    }
+
+    public ChatMessage getMessage() {
+        return message;
+    }
+}
+package com.voibiz.lanchat.desktop.component;
+
+import com.voibiz.lanchat.core.model.Peer;
+import javafx.scene.control.ListCell;
+
+public class PeerListCell extends ListCell<Peer> {
+
+    @Override
+    protected void updateItem(Peer item, boolean empty) {
+        super.updateItem(item, empty);
+        
+        if (empty || item == null) {
+            setText(null);
+            setGraphic(null);
+            getStyleClass().remove("peer-cell-online");
+        } else {
+            String status = item.getStatus() != null ? item.getStatus().toString() : "ONLINE";
+            setText(item.getDisplayName() + " (" + status + ")");
+            
+            if (!getStyleClass().contains("peer-cell-online") && "ONLINE".equals(status)) {
+                getStyleClass().add("peer-cell-online");
+            } else if (!"ONLINE".equals(status)) {
+                getStyleClass().remove("peer-cell-online");
+            }
+        }
+    }
+}
+package com.voibiz.lanchat.desktop.controller;
+
+import com.google.gson.Gson;
+import com.voibiz.lanchat.core.model.ChatMessage;
+import com.voibiz.lanchat.core.model.Peer;
+import com.voibiz.lanchat.core.model.User;
+import com.voibiz.lanchat.core.protocol.MessageType;
+import com.voibiz.lanchat.desktop.component.ChatBubble;
+import com.voibiz.lanchat.desktop.service.ChatService;
+import com.voibiz.lanchat.desktop.service.HistoryService;
+import javafx.application.Platform;
+import javafx.collections.ObservableList;
+import javafx.event.ActionEvent;
+import javafx.fxml.FXML;
+import javafx.scene.control.Button;
+import javafx.scene.control.Label;
+import javafx.scene.control.ListCell;
+import javafx.scene.control.ListView;
+import javafx.scene.control.TextField;
+import javafx.scene.control.ScrollPane;
+import javafx.scene.layout.VBox;
+
+import java.io.IOException;
+import java.util.List;
+
+public class MainController {
+
+    @FXML
+    private ListView<Peer> peerList;
+
+    @FXML
+    private VBox chatArea;
+    
+    @FXML
+    private ScrollPane chatScrollPane;
+    
+    @FXML
+    private Label chatHeaderName;
+    
+    @FXML
+    private Label chatHeaderStatus;
+
+    @FXML
+    private TextField messageField;
+
+    @FXML
+    private Button sendButton;
+
+    private ChatService chatService;
+    private User localUser;
+    private HistoryService historyService;
+    private final Gson gson = new Gson();
+    private final java.util.Map<String, List<ChatMessage>> chatHistories = new java.util.HashMap<>();
+
+    @FXML
+    public void initialize() {
+        peerList.setCellFactory(param -> new ListCell<Peer>() {
+            @Override
+            protected void updateItem(Peer item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setText(null);
+                } else {
+                    setText(item.getDisplayName() + " [" + item.getStatus() + "]");
+                }
+            }
+        });
+
+        peerList.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> {
+            chatArea.getChildren().clear();
+            if (newVal != null) {
+                chatHeaderName.setText(newVal.getDisplayName());
+                chatHeaderStatus.setText(newVal.getStatus().toString());
+                
+                List<ChatMessage> history = chatHistories.get(newVal.getUserId());
+                if (history != null) {
+                    for (ChatMessage msg : history) {
+                        boolean isMine = msg.getSenderId().equals(localUser.getUserId());
+                        
+                        // If it's a message from them, and not read yet, mark read and send receipt
+                        if (!isMine && msg.getStatus() != ChatMessage.MessageStatus.READ) {
+                            msg.setStatus(ChatMessage.MessageStatus.READ);
+                            if (chatService != null) {
+                                chatService.sendReceipt(newVal.getUserId(), msg.getMessageId(), MessageType.MESSAGE_READ);
+                            }
+                        }
+                        
+                        ChatBubble bubble = new ChatBubble(msg, isMine);
+                        chatArea.getChildren().add(bubble);
+                    }
+                }
+            }
+        });
+
+        sendButton.disableProperty().bind(peerList.getSelectionModel().selectedItemProperty().isNull());
+        messageField.disableProperty().bind(peerList.getSelectionModel().selectedItemProperty().isNull());
+    }
+
+    public void initUser(User user) {
+        this.localUser = user;
+        this.chatService = new ChatService(localUser);
+        this.historyService = chatService.getHistoryService();
+
+        try {
+            chatService.start(
+                message -> Platform.runLater(() -> {
+                    if (message.getType() == MessageType.CHAT_MESSAGE && message.getPayload() != null) {
+                        ChatMessage chatMsg = gson.fromJson(message.getPayload(), ChatMessage.class);
+                        if (chatMsg != null) {
+                            String senderId = chatMsg.getSenderId();
+                            if (senderId.equals(localUser.getUserId())) {
+                                senderId = chatMsg.getRecipientId();
+                            }
+                            
+                            List<ChatMessage> history = chatHistories.get(senderId);
+                            if (history == null) {
+                                history = new java.util.ArrayList<>();
+                                chatHistories.put(senderId, history);
+                            }
+                            history.add(chatMsg);
+
+                            Peer selectedPeer = peerList.getSelectionModel().getSelectedItem();
+                            if (selectedPeer != null && senderId.equals(selectedPeer.getUserId())) {
+                                chatMsg.setStatus(ChatMessage.MessageStatus.READ);
+                                chatService.sendReceipt(senderId, chatMsg.getMessageId(), MessageType.MESSAGE_READ);
+                                ChatBubble bubble = new ChatBubble(chatMsg, false);
+                                chatArea.getChildren().add(bubble);
+                                
+                                // Auto-scroll to bottom
+                                Platform.runLater(() -> chatScrollPane.setVvalue(1.0));
+                            }
+                        }
+                    } else if (message.getType() == MessageType.MESSAGE_DELIVERED || message.getType() == MessageType.MESSAGE_READ) {
+                        String messageId = null;
+                        if (message.getPayload() != null && message.getPayload().has("messageId")) {
+                            messageId = message.getPayload().get("messageId").getAsString();
+                        }
+                        if (messageId == null) return;
+                        
+                        String peerId = message.getSender().getUserId();
+                        List<ChatMessage> history = chatHistories.get(peerId);
+                        if (history != null) {
+                            for (ChatMessage msg : history) {
+                                if (msg.getMessageId().equals(messageId)) {
+                                    msg.setStatus(message.getType() == MessageType.MESSAGE_DELIVERED ? 
+                                        ChatMessage.MessageStatus.DELIVERED : ChatMessage.MessageStatus.READ);
+                                    
+                                    Peer selectedPeer = peerList.getSelectionModel().getSelectedItem();
+                                    if (selectedPeer != null && peerId.equals(selectedPeer.getUserId())) {
+                                        for (javafx.scene.Node node : chatArea.getChildren()) {
+                                            if (node instanceof ChatBubble) {
+                                                ChatBubble cb = (ChatBubble) node;
+                                                if (cb.getMessage().getMessageId().equals(messageId)) {
+                                                    cb.updateStatus();
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                    }
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }),
+                peer -> Platform.runLater(() -> {
+                    ObservableList<Peer> items = peerList.getItems();
+                    if (!items.contains(peer)) {
+                        items.add(peer);
+                    }
+                }),
+                peer -> Platform.runLater(() -> {
+                    ObservableList<Peer> items = peerList.getItems();
+                    int index = items.indexOf(peer);
+                    if (index >= 0) {
+                        items.set(index, peer);
+                    } else {
+                        items.add(peer);
+                    }
+                    
+                    // Update header if this peer is currently selected
+                    Peer selectedPeer = peerList.getSelectionModel().getSelectedItem();
+                    if (selectedPeer != null && selectedPeer.equals(peer)) {
+                        chatHeaderName.setText(peer.getDisplayName());
+                        chatHeaderStatus.setText(peer.getStatus().toString());
+                    }
+                }),
+                peer -> Platform.runLater(() -> {
+                    peerList.getItems().remove(peer);
+                })
+            );
+        } catch (IOException e) {
+            e.printStackTrace();
+            System.err.println("Failed to start ChatService: " + e.getMessage());
+        }
+        
+        // Load history for general or something, but skipping for now
+    }
+
+    @FXML
+    public void onSend(ActionEvent event) {
+        String text = messageField.getText();
+
+        if (text != null && !text.trim().isEmpty()) {
+            Peer selectedPeer = peerList.getSelectionModel().getSelectedItem();
+
+            if (selectedPeer != null) {
+                ChatMessage msg = new ChatMessage(
+                        localUser.getUserId(),
+                        localUser.getDisplayName(),
+                        selectedPeer.getUserId(),
+                        null,
+                        text.trim()
+                );
+
+                chatService.sendMessage(selectedPeer.getUserId(), msg);
+
+                String peerId = selectedPeer.getUserId();
+                List<ChatMessage> history = chatHistories.get(peerId);
+                if (history == null) {
+                    history = new java.util.ArrayList<>();
+                    chatHistories.put(peerId, history);
+                }
+                history.add(msg);
+
+                ChatBubble bubble = new ChatBubble(msg, true);
+                chatArea.getChildren().add(bubble);
+                
+                // Auto-scroll to bottom
+                Platform.runLater(() -> chatScrollPane.setVvalue(1.0));
+            }
+
+            messageField.clear();
+        }
+    }
+
+    @FXML
+    public void onRefresh(ActionEvent event) {
+        if (chatService != null) {
+            chatService.refreshDiscovery();
+        }
+    }
+
+    @FXML
+    public void onClearData(ActionEvent event) {
+        if (chatService != null) {
+            chatService.stop();
+        }
+
+        // Delete known_peers.json
+        java.io.File peersFile = new java.io.File("known_peers.json");
+        if (peersFile.exists()) {
+            peersFile.delete();
+        }
+
+        // Delete user_profile.json
+        java.io.File profileFile = new java.io.File("user_profile.json");
+        if (profileFile.exists()) {
+            profileFile.delete();
+        }
+
+        // Delete lanchat.db
+        java.io.File dbFile = new java.io.File("lanchat.db");
+        if (dbFile.exists()) {
+            dbFile.delete();
+        }
+
+        // Navigate back to Login
+        try {
+            javafx.fxml.FXMLLoader loader = new javafx.fxml.FXMLLoader(getClass().getResource("/fxml/login.fxml"));
+            javafx.scene.Parent root = loader.load();
+            javafx.stage.Stage stage = (javafx.stage.Stage) ((javafx.scene.Node) event.getSource()).getScene().getWindow();
+            stage.setScene(new javafx.scene.Scene(root, 400, 500));
+            stage.setTitle("LAN Chat - Login");
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+}
+package com.voibiz.lanchat.desktop.controller;
+
+import com.voibiz.lanchat.core.model.User;
+import javafx.event.ActionEvent;
+import javafx.fxml.FXML;
+import javafx.fxml.FXMLLoader;
+import javafx.scene.Node;
+import javafx.scene.Parent;
+import javafx.scene.Scene;
+import javafx.scene.control.Button;
+import javafx.scene.control.TextField;
+import javafx.stage.Stage;
+
+import java.io.IOException;
+
+public class LoginController {
+
+    @FXML
+    private TextField usernameField;
+
+    @FXML
+    private Button joinButton;
+
+    @FXML
+    public void initialize() {
+        // Default behavior
+    }
+
+    @FXML
+    public void onJoin(ActionEvent event) {
+        String username = usernameField.getText();
+        if (username != null && !username.trim().isEmpty()) {
+            User user = new User(username.trim());
+            
+            try {
+                FXMLLoader loader = new FXMLLoader(getClass().getResource("/fxml/main.fxml"));
+                Parent root = loader.load();
+                
+                MainController mainController = loader.getController();
+                mainController.initUser(user);
+                
+                Stage stage = (Stage) ((Node) event.getSource()).getScene().getWindow();
+                Scene scene = new Scene(root, 800, 600);
+                stage.setScene(scene);
+                stage.show();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+}
+package com.voibiz.lanchat.desktop.service;
+
+import com.voibiz.lanchat.core.model.ChatMessage;
+import com.voibiz.lanchat.core.model.ChatMessage.MessageStatus;
+
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * Service for managing chat history using SQLite.
+ */
+public class HistoryService {
+    private static final String DB_URL = "jdbc:sqlite:lanchat.db";
+
+    public HistoryService() {
+        initializeDatabase();
+    }
+
+    private void initializeDatabase() {
+        String createTableSql = "CREATE TABLE IF NOT EXISTS messages (" +
+                "id TEXT PRIMARY KEY, " +
+                "sender_id TEXT, " +
+                "sender_name TEXT, " +
+                "recipient_id TEXT, " +
+                "room_id TEXT, " +
+                "text TEXT, " +
+                "timestamp INTEGER, " +
+                "status TEXT)";
+
+        try (Connection conn = DriverManager.getConnection(DB_URL);
+             Statement stmt = conn.createStatement()) {
+            stmt.execute(createTableSql);
+            
+            // Add column to existing database if it doesn't exist (for backward compatibility during dev)
+            try {
+                stmt.execute("ALTER TABLE messages ADD COLUMN recipient_id TEXT");
+            } catch (SQLException ignore) {
+                // Column likely already exists
+            }
+        } catch (SQLException e) {
+            System.err.println("Failed to initialize database: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Saves a message to the database.
+     *
+     * @param msg the chat message to save
+     */
+    public void saveMessage(ChatMessage msg) {
+        String insertSql = "INSERT OR REPLACE INTO messages (id, sender_id, sender_name, recipient_id, room_id, text, timestamp, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+
+        try (Connection conn = DriverManager.getConnection(DB_URL);
+             PreparedStatement pstmt = conn.prepareStatement(insertSql)) {
+            pstmt.setString(1, msg.getMessageId());
+            pstmt.setString(2, msg.getSenderId());
+            pstmt.setString(3, msg.getSenderName());
+            pstmt.setString(4, msg.getRecipientId());
+            pstmt.setString(5, msg.getRoomId());
+            pstmt.setString(6, msg.getText());
+            pstmt.setLong(7, msg.getTimestamp());
+            pstmt.setString(8, msg.getStatus() != null ? msg.getStatus().name() : null);
+            pstmt.executeUpdate();
+        } catch (SQLException e) {
+            System.err.println("Failed to save message: " + e.getMessage());
+        }
+    }
+
+    public List<ChatMessage> getMessages(String peerOrRoomId) {
+        List<ChatMessage> messages = new ArrayList<>();
+        // Query both direct messages involving the peer, or messages for the specific room.
+        String selectSql = "SELECT id, sender_id, sender_name, recipient_id, room_id, text, timestamp, status FROM messages " +
+                           "WHERE room_id = ? OR sender_id = ? OR recipient_id = ? " +
+                           "ORDER BY timestamp ASC";
+
+        try (Connection conn = DriverManager.getConnection(DB_URL);
+             PreparedStatement pstmt = conn.prepareStatement(selectSql)) {
+            pstmt.setString(1, peerOrRoomId);
+            pstmt.setString(2, peerOrRoomId);
+            pstmt.setString(3, peerOrRoomId);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                while (rs.next()) {
+                    ChatMessage msg = new ChatMessage(
+                            rs.getString("id"),
+                            rs.getString("sender_id"),
+                            rs.getString("sender_name"),
+                            rs.getString("recipient_id"),
+                            rs.getString("room_id"),
+                            rs.getString("text"),
+                            rs.getLong("timestamp"),
+                            rs.getString("status") != null ? MessageStatus.valueOf(rs.getString("status")) : null
+                    );
+                    messages.add(msg);
+                }
+            }
+        } catch (SQLException e) {
+            System.err.println("Failed to retrieve messages: " + e.getMessage());
+        }
+        return messages;
+    }
+}
+package com.voibiz.lanchat.desktop.service;
+
+import com.google.gson.Gson;
+import com.google.gson.JsonObject;
+import com.voibiz.lanchat.core.model.ChatMessage;
+import com.voibiz.lanchat.core.model.Peer;
+import com.voibiz.lanchat.core.model.User;
+import com.voibiz.lanchat.core.network.DiscoveryListener;
+import com.voibiz.lanchat.core.network.PeerRegistry;
+import com.voibiz.lanchat.core.network.TCPConnectionManager;
+import com.voibiz.lanchat.core.network.TCPMessageHandler;
+import com.voibiz.lanchat.core.network.DiscoveryService;
+import com.voibiz.lanchat.core.network.JmDNSDiscoveryService;
+import com.voibiz.lanchat.core.protocol.MessageType;
+import com.voibiz.lanchat.core.protocol.ProtocolMessage;
+
+import javafx.application.Platform;
+
+import java.io.IOException;
+import java.util.function.Consumer;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+
+/**
+ * Service to bridge core network components with the UI.
+ */
+public class ChatService {
+
+    private final User localUser;
+    private PeerRegistry registry;
+    private DiscoveryService discoveryService;
+    private TCPConnectionManager tcpManager;
+    private final HistoryService historyService;
+    private final Gson gson;
+    private ScheduledExecutorService refreshScheduler;
+    private com.voibiz.lanchat.core.network.KnownPeerCache knownPeerCache;
+
+    /**
+     * Constructs a new ChatService.
+     *
+     * @param localUser the local user
+     */
+    public ChatService(User localUser) {
+        this.localUser = localUser;
+        this.historyService = new HistoryService();
+        this.gson = new Gson();
+    }
+
+    /**
+     * Starts the network services.
+     *
+     * @param onMessageReceived callback for when a message is received
+     * @param onPeerDiscovered  callback for when a new peer is discovered
+     * @param onPeerUpdated     callback for when a peer is updated
+     * @param onPeerLost        callback for when a peer is lost
+     * @throws IOException if network services fail to start
+     */
+    public void start(Consumer<ProtocolMessage> onMessageReceived,
+                      Consumer<Peer> onPeerDiscovered,
+                      Consumer<Peer> onPeerUpdated,
+                      Consumer<Peer> onPeerLost) throws IOException {
+
+        registry = new PeerRegistry();
+        knownPeerCache = new com.voibiz.lanchat.core.network.KnownPeerCache(new java.io.File("known_peers.json"));
+        
+        registry.setListener(new DiscoveryListener() {
+            @Override
+            public void onPeerDiscovered(Peer peer) {
+                knownPeerCache.addPeer(peer);
+                if (onPeerDiscovered != null) {
+                    Platform.runLater(() -> onPeerDiscovered.accept(peer));
+                }
+                new Thread(() -> {
+                    try {
+                        tcpManager.connectToPeer(peer.getUserId(), peer.getIpAddress(), 50506);
+                    } catch (IOException e) {
+                        System.err.println("Failed proactive connection to peer " + peer.getUserId() + ": " + e.getMessage());
+                    }
+                }).start();
+            }
+
+            @Override
+            public void onPeerUpdated(Peer peer) {
+                if (onPeerUpdated != null) {
+                    Platform.runLater(() -> onPeerUpdated.accept(peer));
+                }
+            }
+
+            @Override
+            public void onPeerLost(Peer peer) {
+                if (onPeerLost != null) {
+                    Platform.runLater(() -> onPeerLost.accept(peer));
+                }
+            }
+        });
+
+        tcpManager = new TCPConnectionManager(localUser, new TCPMessageHandler() {
+            @Override
+            public void onMessageReceived(ProtocolMessage message, String peerId) {
+                if (registry.getPeer(peerId) == null && message.getSender() != null) {
+                    User sender = message.getSender();
+                    // Fallback registration if UDP discovery missed them
+                    Peer fallbackPeer = new Peer(sender.getUserId(), sender.getDisplayName(), sender.getIpAddress(), sender.getPort(), Peer.PeerStatus.ONLINE);
+                    registry.addOrUpdatePeer(fallbackPeer);
+                }
+                
+                if (message.getType() == MessageType.CHAT_MESSAGE && message.getPayload() != null) {
+                    ChatMessage chatMsg = gson.fromJson(message.getPayload(), ChatMessage.class);
+                    if (chatMsg != null) {
+                        historyService.saveMessage(chatMsg);
+                        
+                        // Send delivered receipt
+                        try {
+                            JsonObject payload = new JsonObject();
+                            payload.addProperty("messageId", chatMsg.getMessageId());
+                            ProtocolMessage receipt = ProtocolMessage.create(MessageType.MESSAGE_DELIVERED, localUser, payload);
+                            tcpManager.sendMessage(peerId, receipt);
+                        } catch (Exception e) {}
+
+                        if (onMessageReceived != null) {
+                            Platform.runLater(() -> onMessageReceived.accept(message));
+                        }
+                    }
+                } else if (message.getType() == MessageType.MESSAGE_DELIVERED || message.getType() == MessageType.MESSAGE_READ) {
+                    if (onMessageReceived != null) {
+                        Platform.runLater(() -> onMessageReceived.accept(message));
+                    }
+                }
+            }
+
+            @Override
+            public void onPeerConnected(String peerId) {
+                // Handled internally by registry if needed, no explicit requirement.
+            }
+
+            @Override
+            public void onPeerDisconnected(String peerId) {
+                registry.removePeer(peerId);
+            }
+        }, 50506);
+
+        discoveryService = new JmDNSDiscoveryService(localUser, registry);
+
+        tcpManager.start();
+        
+        // Proactively connect to known peers
+        for (Peer peer : knownPeerCache.getKnownPeers()) {
+            if (!peer.getUserId().equals(localUser.getUserId())) {
+                new Thread(() -> {
+                    try {
+                        tcpManager.connectToPeer(peer.getUserId(), peer.getIpAddress(), 50506);
+                    } catch (IOException e) {
+                        // Expected if peer is offline
+                    }
+                }).start();
+            }
+        }
+        
+        discoveryService.start();
+
+        if (refreshScheduler == null || refreshScheduler.isShutdown()) {
+            refreshScheduler = Executors.newSingleThreadScheduledExecutor();
+            refreshScheduler.scheduleWithFixedDelay(() -> {
+                if (discoveryService != null) {
+                    discoveryService.silentRefresh();
+                }
+            }, 10, 10, TimeUnit.SECONDS);
+        }
+    }
+
+    /**
+     * Refreshes the network discovery by restarting the service.
+     */
+    public void refreshDiscovery() {
+        if (discoveryService != null) {
+            new Thread(() -> {
+                try {
+                    discoveryService.stop();
+                    Thread.sleep(500); // Give JmDNS time to clear sockets
+                    discoveryService.start();
+                    System.out.println("[ChatService] Discovery service refreshed.");
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }).start();
+        }
+    }
+
+    /**
+     * Sends a chat message to a peer or room.
+     *
+     * @param peerId the destination peer ID
+     * @param roomId the destination room ID, or null for direct message
+     * @param text   the message text
+     */
+    public void sendMessage(String peerId, ChatMessage chatMsg) {
+        historyService.saveMessage(chatMsg);
+
+        JsonObject payload = gson.toJsonTree(chatMsg).getAsJsonObject();
+        ProtocolMessage protoMsg = ProtocolMessage.create(MessageType.CHAT_MESSAGE, localUser, payload);
+
+        new Thread(() -> {
+            try {
+                Peer peer = registry.getPeer(peerId);
+                if (peer != null) {
+                    tcpManager.connectToPeer(peerId, peer.getIpAddress(), 50506);
+                }
+                tcpManager.sendMessage(peerId, protoMsg);
+            } catch (IOException e) {
+                System.err.println("Failed to send message to peer " + peerId + ": " + e.getMessage());
+            }
+        }).start();
+    }
+
+    public void sendReceipt(String peerId, String messageId, MessageType receiptType) {
+        if (tcpManager == null) return;
+        new Thread(() -> {
+            try {
+                JsonObject payload = new JsonObject();
+                payload.addProperty("messageId", messageId);
+                ProtocolMessage receipt = ProtocolMessage.create(receiptType, localUser, payload);
+                tcpManager.sendMessage(peerId, receipt);
+            } catch (Exception e) {}
+        }).start();
+    }
+
+    /**
+     * Broadcasts a chat message to all known online peers.
+     *
+     * @param text the message text
+     */
+    public void broadcastMessage(String text) {
+        ChatMessage chatMsg = new ChatMessage(
+                localUser.getUserId(),
+                localUser.getDisplayName(),
+                null,
+                null,
+                text
+        );
+        historyService.saveMessage(chatMsg);
+
+        JsonObject payload = gson.toJsonTree(chatMsg).getAsJsonObject();
+        ProtocolMessage protoMsg = ProtocolMessage.create(MessageType.CHAT_MESSAGE, localUser, payload);
+
+        new Thread(() -> {
+            for (Peer peer : registry.getOnlinePeers()) {
+                if (!peer.getUserId().equals(localUser.getUserId())) {
+                    try {
+                        tcpManager.connectToPeer(peer.getUserId(), peer.getIpAddress(), 50506);
+                    } catch (IOException e) {
+                        // ignore
+                    }
+                    tcpManager.sendMessage(peer.getUserId(), protoMsg);
+                }
+            }
+        }).start();
+    }
+
+    /**
+     * Stops the network services.
+     */
+    public void stop() {
+        if (discoveryService != null) {
+            discoveryService.stop();
+        }
+        if (tcpManager != null) {
+            tcpManager.stop();
+        }
+        if (refreshScheduler != null) {
+            refreshScheduler.shutdownNow();
+        }
+    }
+
+    /**
+     * Retrieves the HistoryService instance.
+     *
+     * @return the history service
+     */
+    public HistoryService getHistoryService() {
+        return historyService;
+    }
+}
+package com.voibiz.lanchat.android.core;
+
+import android.content.Context;
+import com.voibiz.lanchat.core.model.ChatMessage;
+import com.voibiz.lanchat.core.model.User;
+import com.voibiz.lanchat.core.network.PeerRegistry;
+import com.voibiz.lanchat.core.network.TCPConnectionManager;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.function.Consumer;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+
+public class ChatManager {
+    private static ChatManager instance;
+
+    private PeerRegistry registry;
+    private com.voibiz.lanchat.core.network.DiscoveryService discoveryService;
+    private TCPConnectionManager tcpManager;
+    private User localUser;
+    private com.voibiz.lanchat.core.network.KnownPeerCache knownPeerCache;
+    private com.voibiz.lanchat.android.data.AppDatabase appDatabase;
+
+    private final List<Consumer<User>> peerDiscoveryListeners = new ArrayList<>();
+    private final List<Consumer<ChatMessage>> messageReceivedListeners = new ArrayList<>();
+    private final List<java.util.function.BiConsumer<String, com.voibiz.lanchat.core.model.ChatMessage.MessageStatus>> messageReceiptListeners = new ArrayList<>();
+    private ScheduledExecutorService refreshScheduler;
+
+    private ChatManager() {
+    }
+
+    public static synchronized ChatManager getInstance() {
+        if (instance == null) {
+            instance = new ChatManager();
+        }
+        return instance;
+    }
+
+    public void init(User user, Context context) {
+        this.localUser = user;
+        this.knownPeerCache = new com.voibiz.lanchat.core.network.KnownPeerCache(new java.io.File(context.getFilesDir(), "known_peers.json"));
+        this.appDatabase = com.voibiz.lanchat.android.data.AppDatabase.getInstance(context);
+        try {
+            this.registry = new PeerRegistry();
+            this.tcpManager = new TCPConnectionManager(this.localUser, new com.voibiz.lanchat.core.network.TCPMessageHandler() {
+                @Override
+                public void onMessageReceived(com.voibiz.lanchat.core.protocol.ProtocolMessage message, String peerId) {
+                    if (registry.getPeer(peerId) == null && message.getSender() != null) {
+                        User sender = message.getSender();
+                        com.voibiz.lanchat.core.model.Peer fallbackPeer = new com.voibiz.lanchat.core.model.Peer(
+                            sender.getUserId(), sender.getDisplayName(), sender.getIpAddress(), sender.getPort(), com.voibiz.lanchat.core.model.Peer.PeerStatus.ONLINE
+                        );
+                        registry.addOrUpdatePeer(fallbackPeer);
+                    }
+
+                    if (message.getType() == com.voibiz.lanchat.core.protocol.MessageType.CHAT_MESSAGE) {
+                        try {
+                            ChatMessage chatMsg = new com.google.gson.Gson().fromJson(message.getPayload(), ChatMessage.class);
+                            
+                            com.google.gson.JsonObject payload = new com.google.gson.JsonObject();
+                            payload.addProperty("messageId", chatMsg.getMessageId());
+                            com.voibiz.lanchat.core.protocol.ProtocolMessage receipt = com.voibiz.lanchat.core.protocol.ProtocolMessage.create(com.voibiz.lanchat.core.protocol.MessageType.MESSAGE_DELIVERED, localUser, payload);
+                            tcpManager.sendMessage(peerId, receipt);
+
+                            // Save to database
+                            if (appDatabase != null) {
+                                new Thread(() -> appDatabase.messageDao().insert(new com.voibiz.lanchat.android.data.MessageEntity(chatMsg))).start();
+                            }
+
+                            notifyMessageReceived(chatMsg);
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
+                    } else if (message.getType() == com.voibiz.lanchat.core.protocol.MessageType.MESSAGE_DELIVERED) {
+                        String messageId = null;
+                        if (message.getPayload() != null && message.getPayload().has("messageId")) {
+                            messageId = message.getPayload().get("messageId").getAsString();
+                        }
+                        if (messageId != null) {
+                            String finalMessageId = messageId;
+                            if (appDatabase != null) {
+                                new Thread(() -> {
+                                    appDatabase.messageDao().updateStatus(finalMessageId, com.voibiz.lanchat.core.model.ChatMessage.MessageStatus.DELIVERED.name());
+                                }).start();
+                            }
+                            for (java.util.function.BiConsumer<String, ChatMessage.MessageStatus> listener : messageReceiptListeners) {
+                                listener.accept(finalMessageId, ChatMessage.MessageStatus.DELIVERED);
+                            }
+                        }
+                    } else if (message.getType() == com.voibiz.lanchat.core.protocol.MessageType.MESSAGE_READ) {
+                        String messageId = null;
+                        if (message.getPayload() != null && message.getPayload().has("messageId")) {
+                            messageId = message.getPayload().get("messageId").getAsString();
+                        }
+                        if (messageId != null) {
+                            String finalMessageId = messageId;
+                            if (appDatabase != null) {
+                                new Thread(() -> {
+                                    appDatabase.messageDao().updateStatus(finalMessageId, com.voibiz.lanchat.core.model.ChatMessage.MessageStatus.READ.name());
+                                }).start();
+                            }
+                            for (java.util.function.BiConsumer<String, ChatMessage.MessageStatus> listener : messageReceiptListeners) {
+                                listener.accept(finalMessageId, ChatMessage.MessageStatus.READ);
+                            }
+                        }
+                    }
+                }
+                @Override
+                public void onPeerConnected(String peerId) {}
+                @Override
+                public void onPeerDisconnected(String peerId) {
+                    if (registry != null) {
+                        registry.removePeer(peerId);
+                    }
+                }
+            }, 50506);
+            
+            this.discoveryService = new NsdDiscoveryService(context, this.localUser, this.registry);
+
+            this.registry.setListener(new com.voibiz.lanchat.core.network.DiscoveryListener() {
+                @Override
+                public void onPeerDiscovered(com.voibiz.lanchat.core.model.Peer peer) {
+                    if (knownPeerCache != null) {
+                        knownPeerCache.addPeer(peer);
+                    }
+                    notifyPeerDiscovered(peer);
+                    new Thread(() -> {
+                        try {
+                            if (tcpManager != null) {
+                                tcpManager.connectToPeer(peer.getUserId(), peer.getIpAddress(), 50506);
+                            }
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
+                    }).start();
+                }
+
+                @Override
+                public void onPeerUpdated(com.voibiz.lanchat.core.model.Peer peer) {
+                    notifyPeerDiscovered(peer);
+                }
+
+                @Override
+                public void onPeerLost(com.voibiz.lanchat.core.model.Peer peer) {
+                    notifyPeerDiscovered(peer);
+                }
+            });
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void start() {
+        try {
+            if (discoveryService != null) {
+                try { discoveryService.start(); } catch (Exception e) {}
+            }
+            if (tcpManager != null) {
+                tcpManager.start();
+                
+                // Proactively connect to known peers
+                if (knownPeerCache != null && localUser != null) {
+                    for (com.voibiz.lanchat.core.model.Peer peer : knownPeerCache.getKnownPeers()) {
+                        if (!peer.getUserId().equals(localUser.getUserId())) {
+                            new Thread(() -> {
+                                try {
+                                    tcpManager.connectToPeer(peer.getUserId(), peer.getIpAddress(), 50506);
+                                } catch (Exception e) {
+                                    // Expected if peer is offline
+                                }
+                            }).start();
+                        }
+                    }
+                }
+            }
+
+            if (refreshScheduler == null || refreshScheduler.isShutdown()) {
+                refreshScheduler = Executors.newSingleThreadScheduledExecutor();
+                refreshScheduler.scheduleWithFixedDelay(() -> {
+                    if (discoveryService != null) {
+                        discoveryService.silentRefresh();
+                    }
+                }, 10, 10, TimeUnit.SECONDS);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void refreshDiscovery() {
+        if (discoveryService != null) {
+            new Thread(() -> {
+                try {
+                    discoveryService.stop();
+                    // Small delay to let the OS unbind
+                    Thread.sleep(500);
+                    discoveryService.start();
+                    System.out.println("[ChatManager] Discovery service refreshed.");
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }).start();
+        }
+    }
+
+    public void stop() {
+        if (discoveryService != null) {
+            discoveryService.stop();
+        }
+        if (tcpManager != null) {
+            tcpManager.stop();
+        }
+        if (refreshScheduler != null) {
+            refreshScheduler.shutdownNow();
+        }
+    }
+
+    public void addPeerDiscoveryListener(Consumer<User> listener) {
+        peerDiscoveryListeners.add(listener);
+    }
+
+    public void removePeerDiscoveryListener(Consumer<User> listener) {
+        peerDiscoveryListeners.remove(listener);
+    }
+
+    public void notifyPeerDiscovered(User user) {
+        for (Consumer<User> listener : peerDiscoveryListeners) {
+            listener.accept(user);
+        }
+    }
+
+    public void addMessageReceivedListener(Consumer<ChatMessage> listener) {
+        messageReceivedListeners.add(listener);
+    }
+
+    public void removeMessageReceivedListener(Consumer<ChatMessage> listener) {
+        messageReceivedListeners.remove(listener);
+    }
+
+    public void notifyMessageReceived(ChatMessage message) {
+        for (Consumer<ChatMessage> listener : messageReceivedListeners) {
+            listener.accept(message);
+        }
+    }
+
+    public void addMessageReceiptListener(java.util.function.BiConsumer<String, ChatMessage.MessageStatus> listener) {
+        messageReceiptListeners.add(listener);
+    }
+
+    public void removeMessageReceiptListener(java.util.function.BiConsumer<String, ChatMessage.MessageStatus> listener) {
+        messageReceiptListeners.remove(listener);
+    }
+
+    public TCPConnectionManager getTcpManager() {
+        return tcpManager;
+    }
+
+    public PeerRegistry getRegistry() {
+        return registry;
+    }
+
+    public User getLocalUser() {
+        return localUser;
+    }
+
+    public void sendMessage(String peerId, ChatMessage chatMessage) {
+        if (tcpManager == null || registry == null) return;
+
+        com.google.gson.JsonObject payload = (com.google.gson.JsonObject) new com.google.gson.Gson().toJsonTree(chatMessage);
+        com.voibiz.lanchat.core.protocol.ProtocolMessage protocolMessage = com.voibiz.lanchat.core.protocol.ProtocolMessage.create(
+                com.voibiz.lanchat.core.protocol.MessageType.CHAT_MESSAGE,
+                localUser,
+                payload
+        );
+
+        new Thread(() -> {
+            try {
+                if (appDatabase != null) {
+                    appDatabase.messageDao().insert(new com.voibiz.lanchat.android.data.MessageEntity(chatMessage));
+                }
+                
+                com.voibiz.lanchat.core.model.Peer peer = registry.getPeer(peerId);
+                if (peer != null) {
+                    tcpManager.connectToPeer(peerId, peer.getIpAddress(), 50506);
+                    tcpManager.sendMessage(peerId, protocolMessage);
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }).start();
+    }
+
+    public void sendReceipt(String peerId, String messageId, com.voibiz.lanchat.core.protocol.MessageType receiptType) {
+        if (tcpManager == null || registry == null) return;
+        new Thread(() -> {
+            try {
+                com.google.gson.JsonObject payload = new com.google.gson.JsonObject();
+                payload.addProperty("messageId", messageId);
+                com.voibiz.lanchat.core.protocol.ProtocolMessage receipt = com.voibiz.lanchat.core.protocol.ProtocolMessage.create(
+                        receiptType, localUser, payload
+                );
+                tcpManager.sendMessage(peerId, receipt);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }).start();
+    }
+
+    public com.voibiz.lanchat.android.data.AppDatabase getDatabase() {
+        return appDatabase;
+    }
+}
+package com.voibiz.lanchat.android.core;
+
+import android.content.Context;
+import android.net.nsd.NsdManager;
+import android.net.nsd.NsdServiceInfo;
+import com.voibiz.lanchat.core.model.Peer;
+import com.voibiz.lanchat.core.model.User;
+import com.voibiz.lanchat.core.network.DiscoveryService;
+import com.voibiz.lanchat.core.network.PeerRegistry;
+
+public class NsdDiscoveryService implements DiscoveryService {
+    public static final String SERVICE_TYPE = "_lanchat._tcp.";
+    
+    private final Context context;
+    private final User localUser;
+    private final PeerRegistry registry;
+    private NsdManager nsdManager;
+    private NsdManager.RegistrationListener registrationListener;
+    private NsdManager.DiscoveryListener discoveryListener;
+    private String registeredServiceName;
+    private android.net.wifi.WifiManager.MulticastLock multicastLock;
+
+    public NsdDiscoveryService(Context context, User localUser, PeerRegistry registry) {
+        this.context = context;
+        this.localUser = localUser;
+        this.registry = registry;
+        this.nsdManager = (NsdManager) context.getSystemService(Context.NSD_SERVICE);
+        
+        android.net.wifi.WifiManager wifi = (android.net.wifi.WifiManager) context.getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+        if (wifi != null) {
+            multicastLock = wifi.createMulticastLock("LanChatMulticastLock");
+            multicastLock.setReferenceCounted(true);
+        }
+    }
+
+    @Override
+    public void start() {
+        if (multicastLock != null && !multicastLock.isHeld()) {
+            multicastLock.acquire();
+        }
+        registerService();
+        discoverServices();
+    }
+
+    @Override
+    public void stop() {
+        if (multicastLock != null && multicastLock.isHeld()) {
+            multicastLock.release();
+        }
+        if (nsdManager != null) {
+            if (discoveryListener != null) {
+                try {
+                    nsdManager.stopServiceDiscovery(discoveryListener);
+                } catch (Exception e) {}
+            }
+            if (registrationListener != null) {
+                try {
+                    nsdManager.unregisterService(registrationListener);
+                } catch (Exception e) {}
+            }
+        }
+    }
+
+    private void registerService() {
+        NsdServiceInfo serviceInfo = new NsdServiceInfo();
+        serviceInfo.setServiceName(localUser.getUserId());
+        serviceInfo.setServiceType(SERVICE_TYPE);
+        serviceInfo.setPort(50506);
+        // On Android API 21+, we can set attributes
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+            String name = localUser.getDisplayName() != null ? localUser.getDisplayName() : "Unknown";
+            serviceInfo.setAttribute("name", name);
+        }
+
+        registrationListener = new NsdManager.RegistrationListener() {
+            @Override
+            public void onServiceRegistered(NsdServiceInfo NsdServiceInfo) {
+                registeredServiceName = NsdServiceInfo.getServiceName();
+            }
+
+            @Override
+            public void onRegistrationFailed(NsdServiceInfo serviceInfo, int errorCode) {}
+
+            @Override
+            public void onServiceUnregistered(NsdServiceInfo arg0) {}
+
+            @Override
+            public void onUnregistrationFailed(NsdServiceInfo serviceInfo, int errorCode) {}
+        };
+
+        nsdManager.registerService(serviceInfo, NsdManager.PROTOCOL_DNS_SD, registrationListener);
+    }
+
+    private void discoverServices() {
+        discoveryListener = new NsdManager.DiscoveryListener() {
+            @Override
+            public void onDiscoveryStarted(String regType) {}
+
+            @Override
+            public void onServiceFound(NsdServiceInfo service) {
+                // Ignore self
+                if (service.getServiceName().equals(localUser.getUserId()) || service.getServiceName().equals(registeredServiceName)) {
+                    return;
+                }
+                
+                nsdManager.resolveService(service, new NsdManager.ResolveListener() {
+                    @Override
+                    public void onResolveFailed(NsdServiceInfo serviceInfo, int errorCode) {}
+
+                    @Override
+                    public void onServiceResolved(NsdServiceInfo serviceInfo) {
+                        if (serviceInfo.getServiceName().equals(localUser.getUserId()) || serviceInfo.getServiceName().equals(registeredServiceName)) {
+                            return;
+                        }
+
+                        String displayName = serviceInfo.getServiceName(); // Fallback
+                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+                            java.util.Map<String, byte[]> attributes = serviceInfo.getAttributes();
+                            if (attributes.containsKey("name")) {
+                                byte[] nameBytes = attributes.get("name");
+                                if (nameBytes != null) {
+                                    displayName = new String(nameBytes);
+                                }
+                            }
+                        }
+
+                        Peer peer = new Peer(
+                                serviceInfo.getServiceName(),
+                                displayName,
+                                serviceInfo.getHost().getHostAddress(),
+                                serviceInfo.getPort(),
+                                Peer.PeerStatus.ONLINE
+                        );
+                        registry.addOrUpdatePeer(peer);
+                    }
+                });
+            }
+
+            @Override
+            public void onServiceLost(NsdServiceInfo service) {
+                if (service.getServiceName().equals(localUser.getUserId()) || service.getServiceName().equals(registeredServiceName)) {
+                    return;
+                }
+                registry.removePeer(service.getServiceName());
+            }
+
+            @Override
+            public void onDiscoveryStopped(String serviceType) {}
+
+            @Override
+            public void onStartDiscoveryFailed(String serviceType, int errorCode) {
+                nsdManager.stopServiceDiscovery(this);
+            }
+
+            @Override
+            public void onStopDiscoveryFailed(String serviceType, int errorCode) {
+                nsdManager.stopServiceDiscovery(this);
+            }
+        };
+
+        nsdManager.discoverServices(SERVICE_TYPE, NsdManager.PROTOCOL_DNS_SD, discoveryListener);
+    }
+
+    @Override
+    public void silentRefresh() {
+        if (nsdManager != null && discoveryListener != null) {
+            new Thread(() -> {
+                try {
+                    nsdManager.stopServiceDiscovery(discoveryListener);
+                    Thread.sleep(500);
+                    discoverServices();
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }).start();
+        }
+    }
+}
+package com.voibiz.lanchat.android.data;
+
+import android.content.Context;
+
+import androidx.room.Database;
+import androidx.room.Room;
+import androidx.room.RoomDatabase;
+
+@Database(entities = {MessageEntity.class}, version = 1, exportSchema = false)
+public abstract class AppDatabase extends RoomDatabase {
+
+    private static volatile AppDatabase INSTANCE;
+
+    public abstract MessageDao messageDao();
+
+    public static AppDatabase getInstance(Context context) {
+        if (INSTANCE == null) {
+            synchronized (AppDatabase.class) {
+                if (INSTANCE == null) {
+                    INSTANCE = Room.databaseBuilder(context.getApplicationContext(),
+                            AppDatabase.class, "lanchat_database")
+                            .build();
+                }
+            }
+        }
+        return INSTANCE;
+    }
+}
+package com.voibiz.lanchat.android.data;
+
+import androidx.room.Dao;
+import androidx.room.Insert;
+import androidx.room.OnConflictStrategy;
+import androidx.room.Query;
+
+import java.util.List;
+
+@Dao
+public interface MessageDao {
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    void insert(MessageEntity msg);
+
+    @Query("SELECT * FROM messages WHERE roomId = :roomId OR (roomId IS NULL AND :roomId IS NULL) ORDER BY timestamp ASC")
+    List<MessageEntity> getMessages(String roomId);
+
+    @Query("UPDATE messages SET status = :status WHERE messageId = :messageId")
+    void updateStatus(String messageId, String status);
+}
+package com.voibiz.lanchat.android.data;
+
+import androidx.annotation.NonNull;
+import androidx.room.Entity;
+import androidx.room.PrimaryKey;
+
+import com.voibiz.lanchat.core.model.ChatMessage;
+
+@Entity(tableName = "messages")
+public class MessageEntity {
+
+    @PrimaryKey
+    @NonNull
+    public String messageId;
+
+    public String senderId;
+    public String senderName;
+    public String recipientId;
+    public String roomId;
+    public String text;
+    public long timestamp;
+    public String status;
+
+    public MessageEntity() {}
+
+    public MessageEntity(ChatMessage chatMessage) {
+        this.messageId = chatMessage.getMessageId();
+        this.senderId = chatMessage.getSenderId();
+        this.senderName = chatMessage.getSenderName();
+        this.recipientId = chatMessage.getRecipientId();
+        this.roomId = chatMessage.getRoomId();
+        this.text = chatMessage.getText();
+        this.timestamp = chatMessage.getTimestamp();
+        this.status = chatMessage.getStatus() != null ? chatMessage.getStatus().name() : null;
+    }
+
+    public ChatMessage toChatMessage() {
+        return new ChatMessage(
+                messageId,
+                senderId,
+                senderName,
+                recipientId,
+                roomId,
+                text,
+                timestamp,
+                status != null ? ChatMessage.MessageStatus.valueOf(status) : null
+        );
+    }
+}
+package com.voibiz.lanchat.android.ui;
+
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.TextView;
+
+import androidx.annotation.NonNull;
+import androidx.recyclerview.widget.RecyclerView;
+
+import com.voibiz.lanchat.android.R;
+import com.voibiz.lanchat.core.model.Peer;
+
+import java.util.ArrayList;
+import java.util.List;
+
+public class PeerAdapter extends RecyclerView.Adapter<PeerAdapter.PeerViewHolder> {
+
+    private List<Peer> peers = new ArrayList<>();
+    private String selectedPeerId = null;
+    private OnPeerClickListener listener;
+
+    public interface OnPeerClickListener {
+        void onPeerClick(Peer peer);
+    }
+
+    public void setOnPeerClickListener(OnPeerClickListener listener) {
+        this.listener = listener;
+    }
+
+    public void setSelectedPeerId(String selectedPeerId) {
+        this.selectedPeerId = selectedPeerId;
+        notifyDataSetChanged();
+    }
+
+    public void setPeers(List<Peer> peers) {
+        this.peers = peers;
+        notifyDataSetChanged();
+    }
+
+    @NonNull
+    @Override
+    public PeerViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+        View view = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_peer, parent, false);
+        return new PeerViewHolder(view);
+    }
+
+    @Override
+    public void onBindViewHolder(@NonNull PeerViewHolder holder, int position) {
+        Peer peer = peers.get(position);
+        
+        if (holder.textDisplayName != null) {
+            holder.textDisplayName.setText(peer.getDisplayName());
+            if (holder.textStatus != null) {
+                holder.textStatus.setText(peer.getStatus() != null ? peer.getStatus().name() : "UNKNOWN");
+                if (peer.getStatus() == com.voibiz.lanchat.core.model.Peer.PeerStatus.ONLINE) {
+                    holder.textStatus.setTextColor(0xFF4CAF50); // Green
+                } else {
+                    holder.textStatus.setTextColor(0xFF757575); // Gray
+                }
+            }
+
+            holder.itemView.setOnClickListener(v -> {
+                if (listener != null) {
+                    listener.onPeerClick(peer);
+                }
+            });
+        }
+    }
+
+    @Override
+    public int getItemCount() {
+        return peers == null ? 0 : peers.size();
+    }
+
+    public static class PeerViewHolder extends RecyclerView.ViewHolder {
+        TextView textDisplayName;
+        TextView textStatus;
+
+        public PeerViewHolder(@NonNull View itemView) {
+            super(itemView);
+            textDisplayName = itemView.findViewById(R.id.peerName);
+            textStatus = itemView.findViewById(R.id.peerStatus);
+        }
+    }
+}
+package com.voibiz.lanchat.android.ui;
+
+import android.os.Bundle;
+import android.widget.EditText;
+import android.widget.ImageView;
+import android.widget.TextView;
+
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+
+import com.voibiz.lanchat.android.R;
+import com.voibiz.lanchat.android.core.ChatManager;
+import com.voibiz.lanchat.core.model.ChatMessage;
+import com.voibiz.lanchat.core.model.Peer;
+
+import java.util.ArrayList;
+import java.util.List;
+
+public class ChatActivity extends AppCompatActivity {
+
+    public static final String EXTRA_PEER_ID = "extra_peer_id";
+
+    private String peerId;
+    private Peer peer;
+    
+    private RecyclerView messageRecycler;
+    private MessageAdapter messageAdapter;
+    private EditText messageInput;
+    
+    private final List<ChatMessage> chatHistory = new ArrayList<>();
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_chat);
+
+        peerId = getIntent().getStringExtra(EXTRA_PEER_ID);
+        if (peerId == null) {
+            finish();
+            return;
+        }
+        
+        peer = ChatManager.getInstance().getRegistry().getPeer(peerId);
+        if (peer == null) {
+            finish();
+            return;
+        }
+
+        TextView chatNameText = findViewById(R.id.chatNameText);
+        TextView chatStatusText = findViewById(R.id.chatStatusText);
+        chatNameText.setText(peer.getDisplayName());
+        chatStatusText.setText(peer.getStatus().toString());
+
+        findViewById(R.id.backButton).setOnClickListener(v -> finish());
+
+        messageRecycler = findViewById(R.id.messageRecycler);
+        messageAdapter = new MessageAdapter(ChatManager.getInstance().getLocalUser().getUserId());
+        messageRecycler.setLayoutManager(new LinearLayoutManager(this));
+        messageRecycler.setAdapter(messageAdapter);
+
+        messageInput = findViewById(R.id.messageInput);
+        findViewById(R.id.sendButton).setOnClickListener(v -> sendMessage());
+
+        // Listen for new messages
+        ChatManager.getInstance().addMessageReceivedListener(this::onMessageReceived);
+        ChatManager.getInstance().addMessageReceiptListener(this::onMessageReceipt);
+        ChatManager.getInstance().addPeerDiscoveryListener(this::onPeerUpdated);
+        
+        // Load history
+        new Thread(() -> {
+            com.voibiz.lanchat.android.data.AppDatabase db = ChatManager.getInstance().getDatabase();
+            if (db != null) {
+                List<com.voibiz.lanchat.android.data.MessageEntity> history = db.messageDao().getMessages(peerId);
+                runOnUiThread(() -> {
+                    for (com.voibiz.lanchat.android.data.MessageEntity entity : history) {
+                        chatHistory.add(entity.toChatMessage());
+                    }
+                    messageAdapter.setMessages(new ArrayList<>(chatHistory));
+                    if (!chatHistory.isEmpty()) {
+                        messageRecycler.scrollToPosition(chatHistory.size() - 1);
+                    }
+                });
+            }
+        }).start();
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        ChatManager.getInstance().removeMessageReceivedListener(this::onMessageReceived);
+        ChatManager.getInstance().removeMessageReceiptListener(this::onMessageReceipt);
+        ChatManager.getInstance().removePeerDiscoveryListener(this::onPeerUpdated);
+    }
+
+    private void onPeerUpdated(com.voibiz.lanchat.core.model.User user) {
+        if (user.getUserId().equals(peerId)) {
+            runOnUiThread(() -> {
+                peer = ChatManager.getInstance().getRegistry().getPeer(peerId);
+                if (peer != null) {
+                    ((TextView) findViewById(R.id.chatStatusText)).setText(peer.getStatus().toString());
+                }
+            });
+        }
+    }
+
+    private void onMessageReceived(ChatMessage message) {
+        String senderId = message.getSenderId();
+        if (senderId.equals(ChatManager.getInstance().getLocalUser().getUserId())) {
+            senderId = message.getRecipientId();
+        }
+        
+        if (senderId.equals(peerId)) {
+            runOnUiThread(() -> {
+                // Send read receipt
+                if (!message.getSenderId().equals(ChatManager.getInstance().getLocalUser().getUserId())) {
+                    message.setStatus(ChatMessage.MessageStatus.READ);
+                    ChatManager.getInstance().sendReceipt(peerId, message.getMessageId(), com.voibiz.lanchat.core.protocol.MessageType.MESSAGE_READ);
+                }
+                
+                chatHistory.add(message);
+                messageAdapter.setMessages(new ArrayList<>(chatHistory));
+                messageRecycler.scrollToPosition(chatHistory.size() - 1);
+            });
+        }
+    }
+
+    private void onMessageReceipt(String messageId, ChatMessage.MessageStatus status) {
+        runOnUiThread(() -> {
+            for (int i = 0; i < chatHistory.size(); i++) {
+                ChatMessage msg = chatHistory.get(i);
+                if (msg.getMessageId().equals(messageId)) {
+                    msg.setStatus(status);
+                    messageAdapter.notifyItemChanged(i);
+                    break;
+                }
+            }
+        });
+    }
+
+    private void sendMessage() {
+        String text = messageInput.getText().toString().trim();
+        if (!text.isEmpty()) {
+            ChatMessage msg = new ChatMessage(
+                    ChatManager.getInstance().getLocalUser().getUserId(),
+                    ChatManager.getInstance().getLocalUser().getDisplayName(),
+                    peerId,
+                    null,
+                    text
+            );
+
+            ChatManager.getInstance().sendMessage(peerId, msg);
+            
+            chatHistory.add(msg);
+            messageAdapter.setMessages(new ArrayList<>(chatHistory));
+            messageRecycler.scrollToPosition(chatHistory.size() - 1);
+
+            messageInput.setText("");
+        }
+    }
+}
+package com.voibiz.lanchat.android.ui;
+
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.TextView;
+
+import androidx.annotation.NonNull;
+import androidx.recyclerview.widget.RecyclerView;
+
+import com.voibiz.lanchat.android.R;
+import com.voibiz.lanchat.core.model.ChatMessage;
+
+import java.util.ArrayList;
+import java.util.List;
+
+public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
+
+    private static final int VIEW_TYPE_SENT = 1;
+    private static final int VIEW_TYPE_RECEIVED = 2;
+
+    private List<ChatMessage> messages = new ArrayList<>();
+    private String localUserId;
+
+    public MessageAdapter(String localUserId) {
+        this.localUserId = localUserId;
+    }
+
+    public void setMessages(List<ChatMessage> messages) {
+        this.messages = messages;
+        notifyDataSetChanged();
+    }
+
+    @Override
+    public int getItemViewType(int position) {
+        ChatMessage message = messages.get(position);
+        if (message.getSenderId() != null && message.getSenderId().equals(localUserId)) {
+            return VIEW_TYPE_SENT;
+        } else {
+            return VIEW_TYPE_RECEIVED;
+        }
+    }
+
+    @NonNull
+    @Override
+    public RecyclerView.ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+        View view = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_message, parent, false);
+        return new MessageViewHolder(view);
+    }
+
+    @Override
+    public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position) {
+        ChatMessage message = messages.get(position);
+        MessageViewHolder messageViewHolder = (MessageViewHolder) holder;
+        
+        if (messageViewHolder.textMessage != null) {
+            messageViewHolder.textMessage.setText(message.getText());
+        }
+        
+        if (messageViewHolder.timeText != null) {
+            String timeStr = new java.text.SimpleDateFormat("HH:mm").format(new java.util.Date(message.getTimestamp()));
+            messageViewHolder.timeText.setText(timeStr);
+        }
+        
+        // Handle Layout Params for bubble direction
+        if (messageViewHolder.bubbleLayout != null) {
+            android.widget.LinearLayout.LayoutParams params = (android.widget.LinearLayout.LayoutParams) messageViewHolder.bubbleLayout.getLayoutParams();
+            if (message.getSenderId() != null && message.getSenderId().equals(localUserId)) {
+                params.gravity = android.view.Gravity.END;
+                messageViewHolder.bubbleLayout.setBackgroundResource(R.drawable.bg_bubble_sent);
+            } else {
+                params.gravity = android.view.Gravity.START;
+                messageViewHolder.bubbleLayout.setBackgroundResource(R.drawable.bg_bubble_received);
+            }
+            messageViewHolder.bubbleLayout.setLayoutParams(params);
+        }
+        
+        if (messageViewHolder.statusText != null) {
+            if (message.getSenderId() != null && message.getSenderId().equals(localUserId)) {
+                messageViewHolder.statusText.setVisibility(View.VISIBLE);
+                switch (message.getStatus()) {
+                    case SENDING: 
+                        messageViewHolder.statusText.setText("");
+                        break;
+                    case SENT: 
+                        messageViewHolder.statusText.setText("✓");
+                        messageViewHolder.statusText.setTextColor(android.graphics.Color.parseColor("#888888"));
+                        break;
+                    case DELIVERED: 
+                        messageViewHolder.statusText.setText("✓✓");
+                        messageViewHolder.statusText.setTextColor(android.graphics.Color.parseColor("#888888"));
+                        break;
+                    case READ: 
+                        messageViewHolder.statusText.setText("✓✓");
+                        messageViewHolder.statusText.setTextColor(android.graphics.Color.parseColor("#34B7F1"));
+                        break;
+                }
+            } else {
+                messageViewHolder.statusText.setVisibility(View.GONE);
+            }
+        }
+    }
+
+    @Override
+    public int getItemCount() {
+        return messages == null ? 0 : messages.size();
+    }
+
+    public static class MessageViewHolder extends RecyclerView.ViewHolder {
+        TextView textMessage;
+        TextView timeText;
+        TextView statusText;
+        android.widget.LinearLayout bubbleLayout;
+
+        public MessageViewHolder(@NonNull View itemView) {
+            super(itemView);
+            textMessage = itemView.findViewById(R.id.messageText);
+            timeText = itemView.findViewById(R.id.timeText);
+            statusText = itemView.findViewById(R.id.statusText);
+            bubbleLayout = itemView.findViewById(R.id.bubbleLayout);
+        }
+    }
+}
+package com.voibiz.lanchat.android.ui;
+
+import android.content.Intent;
+import android.os.Bundle;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.Toast;
+import androidx.appcompat.app.AppCompatActivity;
+
+import com.voibiz.lanchat.android.R;
+import com.voibiz.lanchat.android.core.ChatManager;
+import com.voibiz.lanchat.core.model.User;
+
+import java.util.UUID;
+
+public class LoginActivity extends AppCompatActivity {
+
+    private EditText usernameInput;
+    private Button joinButton;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_login);
+
+        android.content.SharedPreferences prefs = getSharedPreferences("LanChatPrefs", android.content.Context.MODE_PRIVATE);
+        String savedId = prefs.getString("userId", null);
+        String savedName = prefs.getString("userName", null);
+
+        if (savedId != null && savedName != null) {
+            User user = new User(savedName);
+            user.setUserId(savedId);
+            startChat(user);
+            return;
+        }
+
+        usernameInput = findViewById(R.id.usernameInput);
+        joinButton = findViewById(R.id.joinButton);
+
+        joinButton.setOnClickListener(v -> {
+            String username = usernameInput.getText().toString().trim();
+            if (username.isEmpty()) {
+                Toast.makeText(LoginActivity.this, "Please enter a username", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            User user = new User(username);
+            prefs.edit()
+                 .putString("userId", user.getUserId())
+                 .putString("userName", user.getDisplayName())
+                 .apply();
+
+            startChat(user);
+        });
+    }
+
+    private void startChat(User user) {
+        ChatManager chatManager = ChatManager.getInstance();
+        chatManager.init(user, getApplicationContext());
+        chatManager.start();
+
+        Intent intent = new Intent(LoginActivity.this, MainActivity.class);
+        startActivity(intent);
+        finish();
+    }
+}
+package com.voibiz.lanchat.android.ui;
+
+import android.content.Intent;
+import android.os.Bundle;
+import android.view.View;
+
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import com.voibiz.lanchat.android.R;
+import com.voibiz.lanchat.android.core.ChatManager;
+import com.voibiz.lanchat.core.model.Peer;
+
+public class MainActivity extends AppCompatActivity {
+
+    private RecyclerView peerRecycler;
+    private PeerAdapter peerAdapter;
+    private final List<Peer> peers = new ArrayList<>();
+    private ChatManager chatManager;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+
+        peerRecycler = findViewById(R.id.peerRecycler);
+        
+        View refreshButton = findViewById(R.id.refreshButton);
+        refreshButton.setOnClickListener(v -> {
+            if (chatManager != null) {
+                chatManager.refreshDiscovery();
+            }
+        });
+
+        View clearDataButton = findViewById(R.id.clearDataButton);
+        clearDataButton.setOnClickListener(v -> {
+            new Thread(() -> {
+                // Clear Room Database
+                if (chatManager != null && chatManager.getDatabase() != null) {
+                    chatManager.getDatabase().clearAllTables();
+                }
+
+                // Clear SharedPreferences
+                android.content.SharedPreferences prefs = getSharedPreferences("LanChatPrefs", android.content.Context.MODE_PRIVATE);
+                prefs.edit().clear().apply();
+
+                // Clear known_peers.json
+                java.io.File peersFile = new java.io.File(getFilesDir(), "known_peers.json");
+                if (peersFile.exists()) {
+                    peersFile.delete();
+                }
+
+                // Restart app
+                runOnUiThread(() -> {
+                    if (chatManager != null) {
+                        chatManager.stop();
+                    }
+                    Intent intent = new Intent(MainActivity.this, LoginActivity.class);
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                    startActivity(intent);
+                    finish();
+                });
+            }).start();
+        });
+
+        peerRecycler.setLayoutManager(new LinearLayoutManager(this));
+
+        chatManager = ChatManager.getInstance();
+
+        peerAdapter = new PeerAdapter();
+        peerAdapter.setPeers(peers);
+        peerAdapter.setOnPeerClickListener(peer -> {
+            Intent intent = new Intent(this, ChatActivity.class);
+            intent.putExtra(ChatActivity.EXTRA_PEER_ID, peer.getUserId());
+            startActivity(intent);
+        });
+        peerRecycler.setAdapter(peerAdapter);
+
+        chatManager.addPeerDiscoveryListener(user -> {
+            runOnUiThread(() -> {
+                peers.clear();
+                peers.addAll(chatManager.getRegistry().getOnlinePeers());
+                peerAdapter.notifyDataSetChanged();
+            });
+        });
+        
+        // Populate initially
+        peers.addAll(chatManager.getRegistry().getOnlinePeers());
+        peerAdapter.notifyDataSetChanged();
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (isFinishing() && chatManager != null) {
+            chatManager.stop();
+        }
+    }
+}

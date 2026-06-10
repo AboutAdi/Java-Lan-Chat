@@ -31,6 +31,12 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+        }
+    }
+
     buildFeatures {
         viewBinding = true
     }
@@ -47,6 +53,11 @@ dependencies {
     annotationProcessor(libs.room.compiler)
 
     testImplementation("junit:junit:4.13.2")
+    testImplementation(libs.robolectric)
+    testImplementation(libs.espresso.core)
+    testImplementation(libs.espresso.intents)
+    testImplementation("androidx.test.ext:junit:1.1.5")
+    
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
-    androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
+    androidTestImplementation(libs.espresso.core)
 }

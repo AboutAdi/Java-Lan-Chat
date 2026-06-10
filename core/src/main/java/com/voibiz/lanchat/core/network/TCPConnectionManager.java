@@ -14,6 +14,9 @@ import java.net.Socket;
 import java.net.SocketException;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Manages TCP connections to and from peers for reliable message delivery.
@@ -38,7 +41,7 @@ public class TCPConnectionManager {
     private final TCPMessageHandler handler;
 
     /** The port on which the server socket listens for incoming connections. */
-    private final int port;
+    private int port;
 
     /** The server socket accepting incoming peer connections. */
     private ServerSocket serverSocket;
@@ -46,18 +49,25 @@ public class TCPConnectionManager {
     /** Map of peerId → active connection info. */
     private final ConcurrentHashMap<String, ConnectionInfo> connections = new ConcurrentHashMap<>();
 
+    /** Scheduler for the heartbeat mechanism. */
+    private ScheduledExecutorService heartbeatScheduler;
+
+    private void log(String message) {
+        String time = new java.text.SimpleDateFormat("HH:mm:ss.SSS").format(new java.util.Date());
+        System.out.println("[" + time + "] " + message);
+    }
+
     /**
      * Constructs a new {@code TCPConnectionManager}.
      *
      * @param localUser the local user identity; must not be {@code null}
      * @param handler   the handler for incoming messages and connection events;
      *                  must not be {@code null}
-     * @param port      the TCP port to listen on for incoming connections
      */
-    public TCPConnectionManager(User localUser, TCPMessageHandler handler, int port) {
+    public TCPConnectionManager(User localUser, TCPMessageHandler handler) {
         this.localUser = localUser;
         this.handler = handler;
-        this.port = port;
+        this.port = 50505; // Default port
     }
 
     /**
@@ -71,11 +81,41 @@ public class TCPConnectionManager {
      * @throws IOException if the server socket cannot be created
      */
     public void start() throws IOException {
-        serverSocket = new ServerSocket(port);
+        int maxRetries = 100;
+        int currentPort = port;
+        boolean bound = false;
+        while (!bound && currentPort < port + maxRetries) {
+            try {
+                serverSocket = new ServerSocket(currentPort);
+                bound = true;
+            } catch (java.net.BindException e) {
+                currentPort++;
+            }
+        }
+        if (!bound) {
+            throw new IOException("Could not bind to any port in range " + port + "-" + (port + maxRetries));
+        }
+        this.port = serverSocket.getLocalPort();
+        log("[TCPManager] Server listening on port: " + this.port);
 
         Thread acceptorThread = new Thread(this::runAcceptor, "TCP-Connection-Acceptor");
         acceptorThread.setDaemon(true);
         acceptorThread.start();
+
+        heartbeatScheduler = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "TCP-Heartbeat");
+            t.setDaemon(true);
+            return t;
+        });
+        heartbeatScheduler.scheduleAtFixedRate(this::checkHeartbeats, 10, 10, TimeUnit.SECONDS);
+    }
+
+    /**
+     * Returns the port the server is listening on.
+     * @return the listening port
+     */
+    public int getPort() {
+        return this.port;
     }
 
     /**
@@ -93,6 +133,7 @@ public class TCPConnectionManager {
         if (info != null) {
             String json = MessageSerializer.serialize(message);
             info.writer.println(json);
+            log("[TCPManager] Sent message to peer " + peerId + " of type " + message.getType());
         } else {
             System.err.println("[TCPManager] No active connection to peer: " + peerId
                     + ". Use connectToPeer() first.");
@@ -117,16 +158,20 @@ public class TCPConnectionManager {
             return;
         }
 
+        log("[TCPManager] Attempting to connect to peer " + peerId + " at " + ip + ":" + port);
         Socket socket = new Socket(ip, port);
         PrintWriter writer = new PrintWriter(
-                socket.getOutputStream(), true, StandardCharsets.UTF_8);
+                new java.io.OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8), true);
 
         ConnectionInfo info = new ConnectionInfo(socket, writer, peerId);
         connections.put(peerId, info);
 
+        log("[TCPManager] Successfully connected to peer " + peerId);
+
         // Send an initial identification message so the remote peer knows who we are
-        ProtocolMessage identMessage = ProtocolMessage.create(MessageType.CHAT_MESSAGE, localUser, null);
+        ProtocolMessage identMessage = ProtocolMessage.create(MessageType.HELLO, localUser, null);
         writer.println(MessageSerializer.serialize(identMessage));
+        log("[TCPManager] Handshake sent to: " + peerId);
 
         handler.onPeerConnected(peerId);
         startReaderThread(peerId, socket);
@@ -152,6 +197,10 @@ public class TCPConnectionManager {
             }
             handler.onPeerDisconnected(peerId);
         }
+    }
+
+    public int getLocalPort() {
+        return serverSocket != null ? serverSocket.getLocalPort() : port;
     }
 
     /**
@@ -181,6 +230,10 @@ public class TCPConnectionManager {
             } catch (IOException e) {
                 System.err.println("[TCPManager] Error closing server socket: " + e.getMessage());
             }
+        }
+
+        if (heartbeatScheduler != null) {
+            heartbeatScheduler.shutdownNow();
         }
     }
 
@@ -214,10 +267,17 @@ public class TCPConnectionManager {
 
                 String peerId = firstMessage.getSender().getUserId();
                 PrintWriter writer = new PrintWriter(
-                        clientSocket.getOutputStream(), true, StandardCharsets.UTF_8);
+                        new java.io.OutputStreamWriter(clientSocket.getOutputStream(), StandardCharsets.UTF_8), true);
 
                 ConnectionInfo info = new ConnectionInfo(clientSocket, writer, peerId);
                 connections.put(peerId, info);
+
+                log("[TCPManager] Accepted incoming connection from peer: " + peerId + " (" + clientSocket.getInetAddress().getHostAddress() + ")");
+                log("[TCPManager] Handshake received from: " + peerId);
+
+                // Reply with our own HELLO
+                ProtocolMessage identReply = ProtocolMessage.create(MessageType.HELLO, localUser, null);
+                writer.println(MessageSerializer.serialize(identReply));
 
                 handler.onPeerConnected(peerId);
                 handler.onMessageReceived(firstMessage, peerId);
@@ -302,7 +362,26 @@ public class TCPConnectionManager {
                 try {
                     ProtocolMessage message = MessageSerializer.deserialize(line);
                     if (message != null) {
-                        handler.onMessageReceived(message, peerId);
+                        ConnectionInfo info = connections.get(peerId);
+                        if (info != null) {
+                            info.lastActivityTime = System.currentTimeMillis();
+                        }
+
+                        if (message.getType() == MessageType.HEARTBEAT_PING) {
+                            // Reply with PONG
+                            ProtocolMessage pong = ProtocolMessage.create(MessageType.HEARTBEAT_PONG, localUser, null);
+                            if (info != null) {
+                                info.writer.println(MessageSerializer.serialize(pong));
+                            }
+                        } else if (message.getType() == MessageType.HEARTBEAT_PONG) {
+                            // Already updated lastActivityTime, do nothing else
+                        } else if (message.getType() == MessageType.HELLO) {
+                            log("[TCPManager] Received HELLO from peer " + peerId);
+                            handler.onMessageReceived(message, peerId);
+                        } else {
+                            log("[TCPManager] Received message from peer " + peerId + " of type " + message.getType());
+                            handler.onMessageReceived(message, peerId);
+                        }
                     }
                 } catch (Exception e) {
                     System.err.println("[TCPManager] Failed to deserialize message from peer "
@@ -319,6 +398,22 @@ public class TCPConnectionManager {
         disconnectPeer(peerId);
     }
 
+    private void checkHeartbeats() {
+        long now = System.currentTimeMillis();
+        for (String peerId : connections.keySet()) {
+            ConnectionInfo info = connections.get(peerId);
+            if (info != null) {
+                if (now - info.lastActivityTime > 25000) {
+                    System.err.println("[TCPManager] Peer " + peerId + " heartbeat timeout. Disconnecting.");
+                    disconnectPeer(peerId);
+                } else {
+                    ProtocolMessage ping = ProtocolMessage.create(MessageType.HEARTBEAT_PING, localUser, null);
+                    info.writer.println(MessageSerializer.serialize(ping));
+                }
+            }
+        }
+    }
+
     /**
      * Holds the state for a single TCP connection to a peer.
      */
@@ -333,6 +428,9 @@ public class TCPConnectionManager {
         /** The unique user ID of the connected peer. */
         final String peerId;
 
+        /** Timestamp of the last received message from this peer. */
+        volatile long lastActivityTime;
+
         /**
          * Constructs a new {@code ConnectionInfo}.
          *
@@ -344,6 +442,7 @@ public class TCPConnectionManager {
             this.socket = socket;
             this.writer = writer;
             this.peerId = peerId;
+            this.lastActivityTime = System.currentTimeMillis();
         }
     }
 }

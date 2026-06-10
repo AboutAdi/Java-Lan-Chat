@@ -24,6 +24,11 @@ public enum MessageType {
     /** Notification that a peer is leaving the network. */
     DISCOVERY_GOODBYE,
 
+    // ── Handshake (TCP) ─────────────────────────────────────────────────
+
+    /** Initial handshake message sent upon TCP connection establishment. */
+    HELLO,
+
     // ── Chat (TCP) ──────────────────────────────────────────────────────
 
     /** A text chat message sent between peers. */
@@ -49,5 +54,21 @@ public enum MessageType {
     TYPING_INDICATOR,
 
     /** Update to a peer's online/away/busy presence status. */
-    PRESENCE_UPDATE
+    PRESENCE_UPDATE,
+
+    // ── Heartbeat (TCP) ─────────────────────────────────────────────────
+
+    /** Proactive ping to check if connection is alive. */
+    HEARTBEAT_PING,
+
+    /** Response to a ping to confirm connection is alive. */
+    HEARTBEAT_PONG,
+
+    // ── Message Receipts ────────────────────────────────────────────────
+
+    /** Sent automatically when a message is successfully received. */
+    MESSAGE_DELIVERED,
+
+    /** Sent when the user views the message. */
+    MESSAGE_READ
 }

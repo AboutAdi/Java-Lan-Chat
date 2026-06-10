@@ -1,5 +1,6 @@
 [versions]
 gson = "2.11.0"
+jmdns = "3.6.3"
 javafx = "21.0.4"
 atlantafx = "2.0.1"
 ikonli = "12.3.1"
@@ -11,8 +12,15 @@ constraintlayout = "2.1.4"
 recyclerview = "1.3.2"
 android-gradle = "8.7.0"
 
+junit-jupiter = "5.10.2"
+mockito = "5.11.0"
+testfx = "4.0.16-alpha"
+robolectric = "4.12.1"
+espresso = "3.5.1"
+
 [libraries]
 gson = { module = "com.google.code.gson:gson", version.ref = "gson" }
+jmdns = { module = "org.jmdns:jmdns", version.ref = "jmdns" }
 atlantafx-base = { module = "io.github.mkpaz:atlantafx-base", version.ref = "atlantafx" }
 ikonli-javafx = { module = "org.kordamp.ikonli:ikonli-javafx", version.ref = "ikonli" }
 ikonli-materialdesign2 = { module = "org.kordamp.ikonli:ikonli-materialdesign2-pack", version.ref = "ikonli" }
@@ -25,6 +33,16 @@ material = { module = "com.google.android.material:material", version.ref = "mat
 appcompat = { module = "androidx.appcompat:appcompat", version.ref = "appcompat" }
 constraintlayout = { module = "androidx.constraintlayout:constraintlayout", version.ref = "constraintlayout" }
 recyclerview = { module = "androidx.recyclerview:recyclerview", version.ref = "recyclerview" }
+
+# Testing libraries
+junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit-jupiter" }
+mockito-core = { module = "org.mockito:mockito-core", version.ref = "mockito" }
+testfx-junit5 = { module = "org.testfx:testfx-junit5", version.ref = "testfx" }
+testfx-core = { module = "org.testfx:testfx-core", version.ref = "testfx" }
+testfx-monocle = { module = "org.testfx:openjfx-monocle", version = "jdk-12.0.1+2" }
+robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
+espresso-core = { module = "androidx.test.espresso:espresso-core", version.ref = "espresso" }
+espresso-intents = { module = "androidx.test.espresso:espresso-intents", version.ref = "espresso" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "android-gradle" }

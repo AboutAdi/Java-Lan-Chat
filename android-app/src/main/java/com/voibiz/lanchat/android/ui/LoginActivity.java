@@ -23,6 +23,17 @@ public class LoginActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_login);
 
+        android.content.SharedPreferences prefs = getSharedPreferences("LanChatPrefs", android.content.Context.MODE_PRIVATE);
+        String savedId = prefs.getString("userId", null);
+        String savedName = prefs.getString("userName", null);
+
+        if (savedId != null && savedName != null) {
+            User user = new User(savedName);
+            user.setUserId(savedId);
+            startChat(user);
+            return;
+        }
+
         usernameInput = findViewById(R.id.usernameInput);
         joinButton = findViewById(R.id.joinButton);
 
@@ -33,18 +44,23 @@ public class LoginActivity extends AppCompatActivity {
                 return;
             }
 
-            // Create user with a generated ID and placeholder IP
             User user = new User(username);
+            prefs.edit()
+                 .putString("userId", user.getUserId())
+                 .putString("userName", user.getDisplayName())
+                 .apply();
 
-            // Initialize ChatManager
-            ChatManager chatManager = ChatManager.getInstance();
-            chatManager.init(user, getApplicationContext());
-            chatManager.start();
-
-            // Start MainActivity
-            Intent intent = new Intent(LoginActivity.this, MainActivity.class);
-            startActivity(intent);
-            finish();
+            startChat(user);
         });
+    }
+
+    private void startChat(User user) {
+        ChatManager chatManager = ChatManager.getInstance();
+        chatManager.init(user, getApplicationContext());
+        chatManager.start();
+
+        Intent intent = new Intent(LoginActivity.this, MainActivity.class);
+        startActivity(intent);
+        finish();
     }
 }

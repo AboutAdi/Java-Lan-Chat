@@ -58,6 +58,10 @@ public class ChatMessage {
     /** Current delivery status of the message. */
     private MessageStatus status;
 
+    /** Default constructor required for Gson deserialization. */
+    public ChatMessage() {
+    }
+
     /**
      * Constructs a new {@code ChatMessage} with an auto-generated message ID
      * and the current system time as the timestamp. The initial status is set

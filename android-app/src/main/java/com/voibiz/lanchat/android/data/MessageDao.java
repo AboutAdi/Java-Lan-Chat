@@ -15,4 +15,7 @@ public interface MessageDao {
 
     @Query("SELECT * FROM messages WHERE roomId = :roomId OR (roomId IS NULL AND :roomId IS NULL) ORDER BY timestamp ASC")
     List<MessageEntity> getMessages(String roomId);
+
+    @Query("UPDATE messages SET status = :status WHERE messageId = :messageId")
+    void updateStatus(String messageId, String status);
 }

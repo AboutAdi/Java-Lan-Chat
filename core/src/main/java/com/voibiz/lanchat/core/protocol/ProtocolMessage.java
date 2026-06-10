@@ -36,6 +36,16 @@ public class ProtocolMessage {
     /** Arbitrary JSON payload associated with this message; may be {@code null}. */
     private final JsonObject payload;
 
+    /** Default constructor required for Gson deserialization. */
+    public ProtocolMessage() {
+        this.version = 0;
+        this.type = null;
+        this.messageId = null;
+        this.sender = null;
+        this.timestamp = 0;
+        this.payload = null;
+    }
+
     /**
      * Constructs a {@code ProtocolMessage} with all fields specified explicitly.
      *

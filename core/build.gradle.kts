@@ -9,7 +9,14 @@ java {
 
 dependencies {
     api(libs.gson)
+    api(libs.jmdns)
 
     // Testing
-    testImplementation("junit:junit:4.13.2")
+    testImplementation(libs.junit.jupiter)
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    testImplementation(libs.mockito.core)
+}
+
+tasks.withType<Test> {
+    useJUnitPlatform()
 }

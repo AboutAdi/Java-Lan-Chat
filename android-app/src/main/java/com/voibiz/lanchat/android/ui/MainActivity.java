@@ -1,24 +1,25 @@
 package com.voibiz.lanchat.android.ui;
 
+import android.content.Intent;
 import android.os.Bundle;
-import android.widget.Button;
-import android.widget.EditText;
+import android.view.View;
+
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import com.voibiz.lanchat.android.R;
 import com.voibiz.lanchat.android.core.ChatManager;
-import com.voibiz.lanchat.core.model.ChatMessage;
-import com.voibiz.lanchat.core.model.User;
+import com.voibiz.lanchat.core.model.Peer;
 
 public class MainActivity extends AppCompatActivity {
 
     private RecyclerView peerRecycler;
-    private RecyclerView messageRecycler;
-    private EditText messageInput;
-    private Button sendButton;
-
+    private PeerAdapter peerAdapter;
+    private final List<Peer> peers = new ArrayList<>();
     private ChatManager chatManager;
 
     @Override
@@ -27,39 +28,68 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         peerRecycler = findViewById(R.id.peerRecycler);
-        messageRecycler = findViewById(R.id.messageRecycler);
-        messageInput = findViewById(R.id.messageInput);
-        sendButton = findViewById(R.id.sendButton);
+        
+        View refreshButton = findViewById(R.id.refreshButton);
+        refreshButton.setOnClickListener(v -> {
+            if (chatManager != null) {
+                chatManager.refreshDiscovery();
+            }
+        });
+
+        View clearDataButton = findViewById(R.id.clearDataButton);
+        clearDataButton.setOnClickListener(v -> {
+            new Thread(() -> {
+                // Clear Room Database
+                if (chatManager != null && chatManager.getDatabase() != null) {
+                    chatManager.getDatabase().clearAllTables();
+                }
+
+                // Clear SharedPreferences
+                android.content.SharedPreferences prefs = getSharedPreferences("LanChatPrefs", android.content.Context.MODE_PRIVATE);
+                prefs.edit().clear().apply();
+
+                // Clear known peers
+                if (chatManager != null) {
+                    chatManager.clearData();
+                }
+
+                // Restart app
+                runOnUiThread(() -> {
+                    if (chatManager != null) {
+                        chatManager.stop();
+                    }
+                    Intent intent = new Intent(MainActivity.this, LoginActivity.class);
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                    startActivity(intent);
+                    finish();
+                });
+            }).start();
+        });
 
         peerRecycler.setLayoutManager(new LinearLayoutManager(this));
-        messageRecycler.setLayoutManager(new LinearLayoutManager(this));
 
         chatManager = ChatManager.getInstance();
 
+        peerAdapter = new PeerAdapter();
+        peerAdapter.setPeers(peers);
+        peerAdapter.setOnPeerClickListener(peer -> {
+            Intent intent = new Intent(this, ChatActivity.class);
+            intent.putExtra(ChatActivity.EXTRA_PEER_ID, peer.getUserId());
+            startActivity(intent);
+        });
+        peerRecycler.setAdapter(peerAdapter);
+
         chatManager.addPeerDiscoveryListener(user -> {
             runOnUiThread(() -> {
-                // Update peer adapter here
+                peers.clear();
+                peers.addAll(chatManager.getRegistry().getOnlinePeers());
+                peerAdapter.notifyDataSetChanged();
             });
         });
-
-        chatManager.addMessageReceivedListener(message -> {
-            runOnUiThread(() -> {
-                // Update message adapter here
-            });
-        });
-
-        sendButton.setOnClickListener(v -> {
-            String text = messageInput.getText().toString().trim();
-            if (!text.isEmpty()) {
-                User local = chatManager.getLocalUser();
-                ChatMessage message = new ChatMessage(local.getUserId(), local.getDisplayName(), null, null, text);
-
-                // Broadcast or send message via TCP Connection Manager
-                // chatManager.getTcpManager().broadcast(message);
-
-                messageInput.setText("");
-            }
-        });
+        
+        // Populate initially
+        peers.addAll(chatManager.getRegistry().getOnlinePeers());
+        peerAdapter.notifyDataSetChanged();
     }
 
     @Override

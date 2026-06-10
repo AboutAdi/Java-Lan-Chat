@@ -32,6 +32,10 @@ public class LoginController {
         if (username != null && !username.trim().isEmpty()) {
             User user = new User(username.trim());
             
+            java.util.prefs.Preferences prefs = java.util.prefs.Preferences.userNodeForPackage(com.voibiz.lanchat.desktop.App.class);
+            prefs.put("lanchat.username", user.getDisplayName());
+            prefs.put("lanchat.userid", user.getUserId());
+            
             try {
                 FXMLLoader loader = new FXMLLoader(getClass().getResource("/fxml/main.fxml"));
                 Parent root = loader.load();
