@@ -60,7 +60,7 @@ jobs:
           distribution: 'temurin'
       - name: Generate Icon
         run: |
-          mkdir desktop\src\main\resources\icons
+          mkdir -Force desktop\src\main\resources\icons
           magick -background none -resize 256x256 lan-chat-full-optimized.svg desktop\src\main\resources\icons\icon.ico
       - name: Build EXE/MSI
         run: ./gradlew :desktop:jpackage
