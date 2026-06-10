@@ -35,12 +35,6 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-      - name: Install ImageMagick
-        run: sudo apt-get install -y imagemagick
-      - name: Generate Icon
-        run: |
-          mkdir -p desktop/src/main/resources/icons
-          convert -background none -resize 512x512 lan-chat-full-optimized.svg desktop/src/main/resources/icons/icon.png
       - name: Build DEB
         run: ./gradlew :desktop:jpackage
       - name: Upload DEB
@@ -58,10 +52,6 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-      - name: Generate Icon
-        run: |
-          mkdir -Force desktop\src\main\resources\icons
-          magick -background none lan-chat-full-optimized.svg -resize 256x256 desktop\src\main\resources\icons\icon.ico
       - name: Build EXE/MSI
         run: ./gradlew :desktop:jpackage
       - name: Upload Windows Installer
@@ -79,14 +69,6 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-      - name: Generate Icon
-        run: |
-          mkdir -p desktop/src/main/resources/icons
-          magick -background none lan-chat-full-optimized.svg -resize 512x512 desktop/src/main/resources/icons/icon.icns || true
-          # Fallback if magick fails
-          if [ ! -f desktop/src/main/resources/icons/icon.icns ]; then
-            touch desktop/src/main/resources/icons/icon.icns
-          fi
       - name: Build DMG
         run: ./gradlew :desktop:jpackage
       - name: Upload DMG
